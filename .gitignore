@@ -10,6 +10,12 @@
 !.yarn/releases
 !.yarn/versions
 
+.csv
+.pyc
+.venv
+*.egg-info
+*.db
+__pycache__
 # testing
 /coverage
 
