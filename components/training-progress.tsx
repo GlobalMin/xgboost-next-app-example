@@ -1,201 +1,137 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Loader2, CheckCircle, Circle } from "lucide-react";
+import { Loader2, CheckCircle } from "lucide-react";
 
 interface TrainingProgressProps {
-  modelId: number | null;
-}
-
-interface ProgressLog {
-  message: string;
-  timestamp: string;
-}
-
-interface TrainingStep {
-  name: string;
-  description: string;
-  completed: boolean;
-  active: boolean;
+  modelId: string | null;
 }
 
 export function TrainingProgress({ modelId }: TrainingProgressProps) {
-  const [logs, setLogs] = useState<ProgressLog[]>([]);
-  const [status, setStatus] = useState<string>("training");
-  const [steps, setSteps] = useState<TrainingStep[]>([
-    {
-      name: "Data Preparation",
-      description: "Loading and preprocessing data",
-      completed: false,
-      active: true,
-    },
-    {
-      name: "Parameter Tuning",
-      description: "Finding optimal parameters via grid search",
-      completed: false,
-      active: false,
-    },
-    {
-      name: "Model Training",
-      description: "Training final model with best parameters",
-      completed: false,
-      active: false,
-    },
-    {
-      name: "Evaluation",
-      description: "Calculating performance metrics",
-      completed: false,
-      active: false,
-    },
-  ]);
+  const [progress, setProgress] = useState(5);
+  const [currentStep, setCurrentStep] = useState("Initializing training...");
+  const [status, setStatus] = useState("training");
 
   useEffect(() => {
     if (!modelId) return;
 
-    const eventSource = new EventSource(
-      `http://localhost:8000/api/models/${modelId}/progress`,
-    );
+    // Poll for status updates every 2 seconds
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch(
+          `http://localhost:8000/api/projects/${modelId}`,
+        );
+        const data = await response.json();
 
-    eventSource.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.error) {
-        console.error("Progress error:", data.error);
-        eventSource.close();
-        return;
+        setStatus(data.status);
+
+        // Update progress and step based on actual status
+        if (data.status === "Loading and processing data") {
+          setCurrentStep("Loading and processing data...");
+          setProgress(15);
+        } else if (data.status === "Tuning xgboost for best hyperparameters") {
+          setCurrentStep(
+            "Optimizing hyperparameters (this may take 20-40 seconds)...",
+          );
+          setProgress(50);
+        } else if (data.status === "Training xgboost model") {
+          setCurrentStep("Training XGBoost model...");
+          setProgress(50);
+        } else if (data.status === "Finalizing model and calculating metrics") {
+          setCurrentStep("Finalizing model and calculating metrics...");
+          setProgress(90);
+        } else if (data.status === "training") {
+          // Fallback for generic training status
+          const elapsed = Date.now() - new Date(data.created_at).getTime();
+          const estimatedDuration = 45000; // 45 seconds
+          const estimatedProgress = Math.min(
+            95,
+            (elapsed / estimatedDuration) * 100,
+          );
+          setProgress(estimatedProgress);
+          setCurrentStep("Training in progress...");
+        } else if (data.status === "completed") {
+          setProgress(100);
+          setCurrentStep("Training completed!");
+          clearInterval(interval);
+        } else if (data.status === "failed") {
+          setCurrentStep(
+            "Training failed. Please check your data and try again.",
+          );
+          clearInterval(interval);
+        } else {
+          // For any other status, keep showing as training
+          setStatus("training");
+        }
+      } catch (error) {
+        console.error("Failed to fetch training status:", error);
       }
+    }, 2000);
 
-      setStatus(data.status);
-      setLogs(data.logs || []);
-
-      // Update steps based on logs
-      const logMessages = (data.logs || []).map((log) => log.message).join(" ");
-
-      setSteps((prevSteps) => {
-        const newSteps = [...prevSteps];
-
-        // Data Preparation
-        if (
-          logMessages.includes("Dataset loaded") ||
-          logMessages.includes("Train/Test split")
-        ) {
-          newSteps[0].completed = true;
-          newSteps[0].active = false;
-          newSteps[1].active = true;
-        }
-
-        // Parameter Tuning
-        if (
-          logMessages.includes("Starting grid search") ||
-          logMessages.includes("Grid search completed")
-        ) {
-          if (logMessages.includes("Grid search completed")) {
-            newSteps[1].completed = true;
-            newSteps[1].active = false;
-            newSteps[2].active = true;
-          }
-        }
-
-        // Model Training
-        if (logMessages.includes("Training final model")) {
-          newSteps[2].active = true;
-          if (logMessages.includes("Training completed!")) {
-            newSteps[2].completed = true;
-            newSteps[2].active = false;
-            newSteps[3].active = true;
-          }
-        }
-
-        // Evaluation
-        if (logMessages.includes("Training completed!")) {
-          newSteps[3].completed = true;
-          newSteps[3].active = false;
-        }
-
-        return newSteps;
-      });
-
-      if (data.status === "completed" || data.status === "failed") {
-        eventSource.close();
-      }
-    };
-
-    eventSource.onerror = (error) => {
-      console.error("EventSource error:", error);
-      eventSource.close();
-    };
-
-    return () => {
-      eventSource.close();
-    };
+    return () => clearInterval(interval);
   }, [modelId]);
 
   return (
-    <div className="w-full max-w-6xl mx-auto p-6 space-y-6">
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex items-center space-x-3 mb-6">
-          <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-          <h3 className="text-xl font-semibold">Training Your Model</h3>
+    <div className="w-full max-w-4xl mx-auto p-6">
+      <div className="bg-white rounded-lg shadow-lg p-8">
+        <div className="text-center mb-8">
+          {status === "completed" ? (
+            <>
+              <CheckCircle className="h-16 w-16 text-green-600 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                Training Complete!
+              </h2>
+              <p className="text-gray-600">
+                Your model has been successfully trained.
+              </p>
+            </>
+          ) : status === "failed" ? (
+            <>
+              <div className="h-16 w-16 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+                <span className="text-3xl">⚠️</span>
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                Training Failed
+              </h2>
+              <p className="text-gray-600">
+                Please check your data and try again.
+              </p>
+            </>
+          ) : (
+            <>
+              <Loader2 className="h-16 w-16 animate-spin text-blue-600 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                Training Your Model
+              </h2>
+              <p className="text-gray-600">
+                This typically takes 30-60 seconds. Please wait...
+              </p>
+            </>
+          )}
         </div>
 
-        {/* Progress Steps */}
-        <div className="space-y-4 mb-6">
-          {steps.map((step, index) => (
-            <div key={index} className="flex items-start space-x-3">
-              <div className="mt-0.5">
-                {step.completed ? (
-                  <CheckCircle className="h-5 w-5 text-green-600" />
-                ) : step.active ? (
-                  <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
-                ) : (
-                  <Circle className="h-5 w-5 text-gray-300" />
-                )}
+        {status !== "completed" && status !== "failed" && (
+          <>
+            {/* Progress Bar */}
+            <div className="mb-6">
+              <div className="flex justify-between text-sm text-gray-600 mb-2">
+                <span>Progress</span>
+                <span>{Math.round(progress)}%</span>
               </div>
-              <div className="flex-1">
-                <p
-                  className={`font-medium ${
-                    step.completed
-                      ? "text-green-700"
-                      : step.active
-                        ? "text-blue-700"
-                        : "text-gray-500"
-                  }`}
-                >
-                  {step.name}
-                </p>
-                <p className="text-sm text-gray-600">{step.description}</p>
+              <div className="w-full bg-gray-200 rounded-full h-3">
+                <div
+                  className="bg-blue-600 h-3 rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${progress}%` }}
+                />
               </div>
             </div>
-          ))}
-        </div>
 
-        {/* Logs Section */}
-        <div className="border-t pt-4">
-          <h4 className="text-sm font-medium text-gray-700 mb-2">
-            Training Logs
-          </h4>
-          <div className="bg-gray-50 rounded-lg p-3 max-h-48 overflow-y-auto">
-            {logs.length === 0 ? (
-              <p className="text-gray-500 text-sm">
-                Initializing training process...
-              </p>
-            ) : (
-              <div className="space-y-1">
-                {logs
-                  .slice()
-                  .reverse()
-                  .slice(0, 10)
-                  .map((log, index) => (
-                    <div key={index} className="text-xs">
-                      <span className="text-gray-500 font-mono">
-                        {new Date(log.timestamp).toLocaleTimeString()}
-                      </span>
-                      <span className="ml-2 text-gray-700">{log.message}</span>
-                    </div>
-                  ))}
-              </div>
-            )}
-          </div>
-        </div>
+            {/* Current Step */}
+            <div className="text-center">
+              <p className="text-gray-700 font-medium">{currentStep}</p>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

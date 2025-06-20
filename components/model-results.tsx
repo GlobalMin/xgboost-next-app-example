@@ -44,7 +44,7 @@ export function ModelResults({ model }: ModelResultsProps) {
     setLogsLoading(true);
     try {
       const response = await fetch(
-        `http://localhost:8000/api/models/${model.id}/logs`,
+        `http://localhost:8000/api/projects/${model.id}/logs`,
       );
       if (response.ok) {
         const data = await response.json();
@@ -162,7 +162,7 @@ export function ModelResults({ model }: ModelResultsProps) {
       <div className="bg-white rounded-lg shadow p-6">
         <h3 className="text-lg font-semibold mb-4">Feature Importance</h3>
         {featureData.length > 0 ? (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {featureData.map((item, index) => {
               const maxImportance = Math.max(
                 ...featureData.map((d) => d.importance),
@@ -170,11 +170,17 @@ export function ModelResults({ model }: ModelResultsProps) {
               const percentage = (item.importance / maxImportance) * 100;
 
               return (
-                <div key={index} className="flex items-center space-x-3">
-                  <div className="w-32 text-sm font-medium text-gray-700 text-right">
+                <div
+                  key={index}
+                  className="grid grid-cols-12 gap-2 items-center"
+                >
+                  <div
+                    className="col-span-4 text-xs font-medium text-gray-700 text-right break-all pr-2"
+                    title={item.feature}
+                  >
                     {item.feature}
                   </div>
-                  <div className="flex-1">
+                  <div className="col-span-8">
                     <div className="relative">
                       <div className="w-full bg-gray-200 rounded-full h-6">
                         <div

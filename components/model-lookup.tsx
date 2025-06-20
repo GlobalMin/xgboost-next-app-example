@@ -23,7 +23,7 @@ export function ModelLookup({ onModelFound }: ModelLookupProps) {
 
     try {
       const response = await fetch(
-        `http://localhost:8000/api/models/${modelId}`,
+        `http://localhost:8000/api/projects/${modelId}`,
       );
 
       if (!response.ok) {

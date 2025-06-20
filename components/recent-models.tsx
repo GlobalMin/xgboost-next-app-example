@@ -17,7 +17,7 @@ export function RecentModels({ onSelectModel }: RecentModelsProps) {
 
   const fetchModels = async () => {
     try {
-      const response = await fetch("http://localhost:8000/api/models");
+      const response = await fetch("http://localhost:8000/api/projects");
       if (response.ok) {
         const data = await response.json();
         setModels(data.slice(0, 5)); // Show only 5 most recent

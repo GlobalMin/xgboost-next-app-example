@@ -19,6 +19,7 @@ __pycache__
 # testing
 /coverage
 */models/
+.ruff_cache
 
 # next.js
 /.next/
@@ -30,6 +31,10 @@ __pycache__
 # misc
 .DS_Store
 *.pem
+
+# logs
+logs/
+*.log
 
 # debug
 npm-debug.log*

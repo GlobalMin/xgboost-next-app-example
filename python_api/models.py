@@ -1,7 +1,5 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import List, Dict, Any, Optional
-
-# DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "xgboost_models.db")
 
 
 class TrainRequest(BaseModel):
@@ -16,6 +14,25 @@ class TrainRequest(BaseModel):
     tune_parameters: bool = True
     early_stopping_rounds: int = 50
     objective: str = "binary:logistic"
+    custom_param_grid: Optional[Dict[str, List[Any]]] = None
+
+    @field_validator("custom_param_grid")
+    @classmethod
+    def validate_custom_param_grid(
+        cls, v: Optional[Dict[str, List[Any]]]
+    ) -> Optional[Dict[str, List[Any]]]:
+        """Validate custom parameter grid if provided"""
+        if v is None:
+            return v
+
+        from xgb_params import validate_param_grid
+
+        is_valid, errors = validate_param_grid(v)
+
+        if not is_valid:
+            raise ValueError(f"Invalid parameter grid: {'; '.join(errors)}")
+
+        return v
 
 
 class ModelInfo(BaseModel):
@@ -33,9 +50,3 @@ class ModelInfo(BaseModel):
     feature_importance: Optional[Dict[str, float]] = None
     confusion_matrix: Optional[List[List[int]]] = None
     status: str
-
-
-# def get_db():
-#     conn = sqlite3.connect(DB_PATH)
-#     conn.row_factory = sqlite3.Row
-#     return conn

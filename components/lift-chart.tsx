@@ -43,12 +43,14 @@ export function LiftChart({ data }: LiftChartProps) {
   // Transform data for Recharts
   const chartData = data.map((item) => ({
     bin: `Bin ${item.bin}`,
-    "Predicted Rate": (item.avg_prediction * 100).toFixed(1),
-    "Actual Rate": (item.actual_rate * 100).toFixed(1),
+    "Predicted Rate": parseFloat((item.avg_prediction * 100).toFixed(1)),
+    "Actual Rate": parseFloat((item.actual_rate * 100).toFixed(1)),
     predictedRaw: item.avg_prediction,
     actualRaw: item.actual_rate,
     count: item.count,
   }));
+
+  console.log("Transformed chart data:", chartData);
 
   // Custom tooltip
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -81,43 +83,58 @@ export function LiftChart({ data }: LiftChartProps) {
       </div>
 
       {/* Chart */}
-      <div className="h-80 w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart
-            data={chartData}
-            margin={{
-              top: 20,
-              right: 30,
-              left: 20,
-              bottom: 5,
-            }}
-          >
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="bin" tick={{ fontSize: 12 }} />
-            <YAxis
-              label={{ value: "Rate (%)", angle: -90, position: "insideLeft" }}
-              tick={{ fontSize: 12 }}
-            />
-            <Tooltip content={<CustomTooltip />} />
-            <Legend />
-            <Line
-              type="monotone"
-              dataKey="Predicted Rate"
-              stroke="#3B82F6"
-              strokeWidth={3}
-              dot={{ fill: "#3B82F6", strokeWidth: 2, r: 4 }}
-              name="Predicted Rate"
-            />
-            <Line
-              type="monotone"
-              dataKey="Actual Rate"
-              stroke="#10B981"
-              strokeWidth={3}
-              dot={{ fill: "#10B981", strokeWidth: 2, r: 4 }}
-              name="Actual Rate"
-            />
-          </LineChart>
-        </ResponsiveContainer>
+      <div className="w-full overflow-x-auto">
+        <div className="h-96" style={{ minWidth: "800px" }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart
+              data={chartData}
+              margin={{
+                top: 20,
+                right: 30,
+                left: 40,
+                bottom: 60,
+              }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis
+                dataKey="bin"
+                tick={{ fontSize: 10 }}
+                interval={0}
+                angle={-45}
+                textAnchor="end"
+                height={80}
+              />
+              <YAxis
+                label={{
+                  value: "Rate (%)",
+                  angle: -90,
+                  position: "insideLeft",
+                }}
+                tick={{ fontSize: 12 }}
+                domain={[0, "auto"]}
+                tickFormatter={(value) => `${value}%`}
+              />
+              <Tooltip content={<CustomTooltip />} />
+              <Legend />
+              <Line
+                type="monotone"
+                dataKey="Predicted Rate"
+                stroke="#3B82F6"
+                strokeWidth={3}
+                dot={{ fill: "#3B82F6", strokeWidth: 2, r: 4 }}
+                name="Predicted Rate"
+              />
+              <Line
+                type="monotone"
+                dataKey="Actual Rate"
+                stroke="#10B981"
+                strokeWidth={3}
+                dot={{ fill: "#10B981", strokeWidth: 2, r: 4 }}
+                name="Actual Rate"
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
       </div>
     </div>
   );

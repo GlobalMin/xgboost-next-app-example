@@ -23,11 +23,27 @@ export function DataPreview({ data, onTrain }: DataPreviewProps) {
   const [showPreview, setShowPreview] = useState(true);
   const [targetColumn, setTargetColumn] = useState("");
   const [featureColumns, setFeatureColumns] = useState<string[]>([]);
+  const [featureScores, setFeatureScores] = useState<Record<string, number>>(
+    {},
+  );
+  const [checkingSignal, setCheckingSignal] = useState(false);
   const [params, setParams] = useState({
     testSize: 0.2,
     cvFolds: 3,
     tuneParameters: true,
     earlyStoppingRounds: 50,
+    customParamGrid: null as any,
+  });
+
+  // Default custom parameters when auto-tune is disabled
+  const [customParams, setCustomParams] = useState({
+    max_depth: "3,4,5",
+    learning_rate: "0.01,0.1",
+    lambda: "0,0.5,1.0",
+    alpha: "0",
+    min_child_weight: "1",
+    subsample: "0.8,1.0",
+    colsample_bytree: "0.8,1.0",
   });
 
   const handleFeatureToggle = (column: string) => {
@@ -43,6 +59,54 @@ export function DataPreview({ data, onTrain }: DataPreviewProps) {
   const handleTargetSelect = (column: string) => {
     setTargetColumn(column);
     setFeatureColumns((prev) => prev.filter((c) => c !== column));
+    // Reset feature scores when target changes
+    setFeatureScores({});
+  };
+
+  const checkFeatureSignal = async () => {
+    if (!targetColumn) {
+      alert("Please select a target column first");
+      return;
+    }
+
+    setCheckingSignal(true);
+    try {
+      const response = await fetch(
+        "http://localhost:8000/api/check-feature-signal",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            csv_filename: data.filename,
+            target_column: targetColumn,
+            feature_columns: data.columns.filter((col) => col !== targetColumn),
+          }),
+        },
+      );
+
+      if (response.ok) {
+        const scores = await response.json();
+        setFeatureScores(scores);
+
+        // Auto-select features with high scores (top 75%)
+        const sortedFeatures = Object.entries(scores)
+          .sort(([, a], [, b]) => b - a)
+          .map(([feature]) => feature);
+
+        const topFeatures = sortedFeatures.slice(
+          0,
+          Math.ceil(sortedFeatures.length * 0.75),
+        );
+        setFeatureColumns(topFeatures);
+      }
+    } catch (error) {
+      console.error("Failed to check feature signal:", error);
+      alert("Failed to check feature signal");
+    } finally {
+      setCheckingSignal(false);
+    }
   };
 
   const handleTrain = () => {
@@ -60,11 +124,36 @@ export function DataPreview({ data, onTrain }: DataPreviewProps) {
     const datasetName = data.filename.replace(".csv", "");
     const modelName = `${datasetName}_${targetColumn}_${timestamp}`;
 
+    // Prepare custom parameter grid if auto-tune is disabled
+    let finalParams = { ...params };
+    if (!params.tuneParameters) {
+      // Parse comma-separated values into arrays
+      const parseParamValues = (value: string, isInt: boolean = false) => {
+        return value
+          .split(",")
+          .map((v) => {
+            const trimmed = v.trim();
+            return isInt ? parseInt(trimmed) : parseFloat(trimmed);
+          })
+          .filter((v) => !isNaN(v));
+      };
+
+      finalParams.customParamGrid = {
+        max_depth: parseParamValues(customParams.max_depth, true),
+        learning_rate: parseParamValues(customParams.learning_rate),
+        lambda: parseParamValues(customParams.lambda),
+        alpha: parseParamValues(customParams.alpha),
+        min_child_weight: parseParamValues(customParams.min_child_weight),
+        subsample: parseParamValues(customParams.subsample),
+        colsample_bytree: parseParamValues(customParams.colsample_bytree),
+      };
+    }
+
     onTrain({
       modelName,
       targetColumn,
       featureColumns,
-      params,
+      params: finalParams,
     });
   };
 
@@ -152,32 +241,80 @@ export function DataPreview({ data, onTrain }: DataPreviewProps) {
             </select>
           </div>
 
+          {targetColumn && (
+            <div className="flex justify-end">
+              <button
+                onClick={checkFeatureSignal}
+                disabled={checkingSignal}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {checkingSignal ? "Checking..." : "Check Features for Signal"}
+              </button>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Feature Columns
+              Feature Columns{" "}
+              {Object.keys(featureScores).length > 0 &&
+                "(sorted by signal strength)"}
             </label>
-            <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded-md p-3">
-              {data.columns.map((column) => (
-                <label
-                  key={column}
-                  className={`flex items-center space-x-2 ${
-                    column === targetColumn
-                      ? "opacity-50 cursor-not-allowed"
-                      : "cursor-pointer"
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={featureColumns.includes(column)}
-                    onChange={() => handleFeatureToggle(column)}
-                    disabled={column === targetColumn}
-                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                  <span className="text-sm">
-                    {column} ({data.dtypes[column]})
-                  </span>
-                </label>
-              ))}
+            <div className="space-y-2 max-h-96 overflow-y-auto border border-gray-200 rounded-md p-3">
+              {(() => {
+                // Sort columns by feature scores if available
+                const sortedColumns =
+                  Object.keys(featureScores).length > 0
+                    ? [...data.columns].sort((a, b) => {
+                        const scoreA = featureScores[a] || 0;
+                        const scoreB = featureScores[b] || 0;
+                        return scoreB - scoreA;
+                      })
+                    : data.columns;
+
+                return sortedColumns.map((column) => {
+                  const score = featureScores[column];
+                  const maxScore = Math.max(...Object.values(featureScores));
+                  const normalizedScore =
+                    score && maxScore > 0 ? score / maxScore : 0;
+
+                  return (
+                    <label
+                      key={column}
+                      className={`flex items-center justify-between p-2 rounded ${
+                        column === targetColumn
+                          ? "opacity-50 cursor-not-allowed bg-gray-50"
+                          : "cursor-pointer hover:bg-gray-50"
+                      }`}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={featureColumns.includes(column)}
+                          onChange={() => handleFeatureToggle(column)}
+                          disabled={column === targetColumn}
+                          className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        />
+                        <span className="text-sm">
+                          {column} ({data.dtypes[column]})
+                        </span>
+                      </div>
+                      {score !== undefined && (
+                        <div className="flex items-center space-x-2">
+                          <div className="w-24 bg-gray-200 rounded-full h-2">
+                            <div
+                              className="bg-blue-600 h-2 rounded-full"
+                              style={{ width: `${normalizedScore * 100}%` }}
+                            />
+                          </div>
+                          <span className="text-xs text-gray-600 w-12 text-right">
+                            {score.toFixed(1)}
+                          </span>
+                        </div>
+                      )}
+                    </label>
+                  );
+                });
+              })()}
             </div>
           </div>
 
@@ -248,6 +385,139 @@ export function DataPreview({ data, onTrain }: DataPreviewProps) {
               </label>
             </div>
           </div>
+
+          {!params.tuneParameters && (
+            <div className="mt-4 p-4 bg-gray-50 rounded-md space-y-3">
+              <h4 className="text-sm font-semibold text-gray-700">
+                Custom Parameter Grid
+              </h4>
+              <p className="text-xs text-gray-600 mb-2">
+                Enter comma-separated values to test multiple options (e.g.,
+                3,4,5)
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Max Depth
+                  </label>
+                  <input
+                    type="text"
+                    value={customParams.max_depth}
+                    onChange={(e) =>
+                      setCustomParams({
+                        ...customParams,
+                        max_depth: e.target.value,
+                      })
+                    }
+                    placeholder="e.g., 3,4,5"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Learning Rate
+                  </label>
+                  <input
+                    type="text"
+                    value={customParams.learning_rate}
+                    onChange={(e) =>
+                      setCustomParams({
+                        ...customParams,
+                        learning_rate: e.target.value,
+                      })
+                    }
+                    placeholder="e.g., 0.01,0.05,0.1"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Lambda (L2)
+                  </label>
+                  <input
+                    type="text"
+                    value={customParams.lambda}
+                    onChange={(e) =>
+                      setCustomParams({
+                        ...customParams,
+                        lambda: e.target.value,
+                      })
+                    }
+                    placeholder="e.g., 0,0.5,1"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Alpha (L1)
+                  </label>
+                  <input
+                    type="text"
+                    value={customParams.alpha}
+                    onChange={(e) =>
+                      setCustomParams({
+                        ...customParams,
+                        alpha: e.target.value,
+                      })
+                    }
+                    placeholder="e.g., 0,0.1,0.5"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Min Child Weight
+                  </label>
+                  <input
+                    type="text"
+                    value={customParams.min_child_weight}
+                    onChange={(e) =>
+                      setCustomParams({
+                        ...customParams,
+                        min_child_weight: e.target.value,
+                      })
+                    }
+                    placeholder="e.g., 1,3,5"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Subsample
+                  </label>
+                  <input
+                    type="text"
+                    value={customParams.subsample}
+                    onChange={(e) =>
+                      setCustomParams({
+                        ...customParams,
+                        subsample: e.target.value,
+                      })
+                    }
+                    placeholder="e.g., 0.6,0.8,1.0"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Col Sample by Tree
+                  </label>
+                  <input
+                    type="text"
+                    value={customParams.colsample_bytree}
+                    onChange={(e) =>
+                      setCustomParams({
+                        ...customParams,
+                        colsample_bytree: e.target.value,
+                      })
+                    }
+                    placeholder="e.g., 0.6,0.8,1.0"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           <button
             onClick={handleTrain}

@@ -4,14 +4,18 @@ import pandas as pd
 import numpy as np
 import xgboost as xgb
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelEncoder, OrdinalEncoder
+from sklearn.impute import SimpleImputer
 from typing import Dict, Any, Tuple, List, Optional
 import os
 from itertools import product
 
 
 from config import UPLOAD_DIR, MODEL_DIR
-from mongo_utils import log_training_message
+from logging_config import get_logger
+
+# Get logger for this module
+logger = get_logger(__name__)
 
 
 def load_dataset(filename: str) -> pd.DataFrame:
@@ -25,11 +29,11 @@ def load_dataset(filename: str) -> pd.DataFrame:
 
 def preprocess_data(
     df: pd.DataFrame, feature_columns: List[str], target_column: str
-) -> Tuple[pd.DataFrame, pd.Series, Dict[str, LabelEncoder]]:
-    """Preprocess data for XGBoost training
+) -> Tuple[pd.DataFrame, pd.Series, Dict[str, Any]]:
+    """Preprocess data for XGBoost training with improved handling of categorical and missing values
 
     Returns:
-        Tuple of (X_processed, y_processed, label_encoders)
+        Tuple of (X_processed, y_processed, preprocessing_artifacts)
     """
     X = df[feature_columns].copy()
     y = df[target_column].copy()
@@ -38,30 +42,59 @@ def preprocess_data(
     if y.isnull().any():
         raise ValueError("Target column contains missing values")
 
-    # Handle missing values in features
-    for col in X.columns:
-        if X[col].dtype == "object":
-            X[col] = X[col].fillna("missing")
-        else:
-            median_val = X[col].median() if len(X[col].dropna()) > 0 else 0
-            X[col] = X[col].fillna(median_val)
+    # Separate numeric and categorical columns
+    numeric_columns = X.select_dtypes(include=[np.number]).columns.tolist()
+    categorical_columns = X.select_dtypes(include=["object"]).columns.tolist()
 
-    # Encode categorical variables
-    label_encoders = {}
-    for col in X.columns:
-        if X[col].dtype == "object":
-            le = LabelEncoder()
-            X[col] = le.fit_transform(X[col])
-            label_encoders[col] = le
+    # Store preprocessing artifacts for potential inverse transformation
+    preprocessing_artifacts = {
+        "numeric_columns": numeric_columns,
+        "categorical_columns": categorical_columns,
+        "encoders": {},
+        "imputers": {},
+    }
+
+    # Handle missing values for numeric features using median imputation
+    if numeric_columns:
+        numeric_imputer = SimpleImputer(strategy="median")
+        X[numeric_columns] = numeric_imputer.fit_transform(X[numeric_columns])
+        preprocessing_artifacts["imputers"]["numeric"] = numeric_imputer
+
+    # Handle missing values for categorical features using constant imputation
+    if categorical_columns:
+        # For categorical features, fill missing with a constant
+        categorical_imputer = SimpleImputer(strategy="constant", fill_value="missing")
+        X[categorical_columns] = categorical_imputer.fit_transform(
+            X[categorical_columns]
+        )
+        preprocessing_artifacts["imputers"]["categorical"] = categorical_imputer
+
+        # Use OrdinalEncoder for categorical variables
+        # OrdinalEncoder handles unknown categories better than LabelEncoder
+        ordinal_encoder = OrdinalEncoder(
+            handle_unknown="use_encoded_value",
+            unknown_value=-1,  # Unknown categories will be encoded as -1
+        )
+        X[categorical_columns] = ordinal_encoder.fit_transform(X[categorical_columns])
+        preprocessing_artifacts["encoders"]["categorical"] = ordinal_encoder
+
+        # Store individual column names with their categories for interpretability
+        for i, col in enumerate(categorical_columns):
+            preprocessing_artifacts["encoders"][col] = {
+                "categories": ordinal_encoder.categories_[i].tolist()  # type: ignore
+            }
 
     # Encode target if categorical
     if y.dtype == "object":
         le_y = LabelEncoder()
         y_encoded = le_y.fit_transform(y)
-        y = pd.Series(np.array(y_encoded).tolist(), index=y.index, name=y.name)
-        label_encoders["_target"] = le_y
+        y = pd.Series(y_encoded, index=y.index, name=y.name)  # type: ignore
+        preprocessing_artifacts["encoders"]["_target"] = le_y
 
-    return X, y, label_encoders
+    # Ensure all columns are numeric after preprocessing
+    X = X.astype(np.float32)
+
+    return X, y, preprocessing_artifacts
 
 
 def create_train_test_split(
@@ -199,9 +232,9 @@ def calculate_lift_chart(
     return lift_data
 
 
-def save_model(model: xgb.Booster, model_id: str) -> str:
+def save_model(model: xgb.Booster, project_id: str) -> str:
     """Save XGBoost model to file"""
-    model_path = os.path.join(MODEL_DIR, f"{model_id}.json")
+    model_path = os.path.join(MODEL_DIR, f"{project_id}.json")
     model.save_model(model_path)
     return model_path
 
@@ -231,7 +264,7 @@ def tune_hyperparameters(
     param_grid: Dict[str, List],
     cv_folds: int,
     early_stopping_rounds: int,
-    model_id: str,
+    project_id: str,
 ) -> Tuple[Dict[str, Any], float, int]:
     """Tune hyperparameters using grid search
 
@@ -239,8 +272,9 @@ def tune_hyperparameters(
         Tuple of (best_params, best_score, best_n_estimators)
     """
     param_combinations = generate_parameter_grid(param_grid)
-    log_training_message(
-        model_id, f"Testing {len(param_combinations)} parameter combinations"
+    logger.info(
+        f"Testing {len(param_combinations)} parameter combinations",
+        extra={"project_id": project_id},
     )
 
     best_score = -np.inf
@@ -250,7 +284,7 @@ def tune_hyperparameters(
     for idx, params in enumerate(param_combinations):
         cv_params = {**base_params, **params}
 
-        mean_score, std_score, optimal_rounds = cross_validate_params(
+        mean_score, _, optimal_rounds = cross_validate_params(
             dtrain, cv_params, cv_folds, 500, early_stopping_rounds
         )
 
@@ -261,14 +295,14 @@ def tune_hyperparameters(
 
         # Log progress every 5 combinations
         if (idx + 1) % 5 == 0:
-            log_training_message(
-                model_id,
+            logger.info(
                 f"Progress: {idx + 1}/{len(param_combinations)}, Best AUC: {best_score:.4f}",
+                extra={"project_id": project_id},
             )
 
-    log_training_message(
-        model_id,
+    logger.info(
         f"Best params: {best_params}, CV AUC: {best_score:.4f}, Trees: {best_n_estimators}",
+        extra={"project_id": project_id},
     )
 
     return best_params, best_score, best_n_estimators
