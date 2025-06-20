@@ -5,7 +5,7 @@ from sklearn.metrics import roc_auc_score
 from typing import Dict, Any
 
 
-from models import TrainRequest
+from python_api.models import TrainRequest
 from mongo_utils import (
     update_project_results,
     cleanup_failed_project,
@@ -191,8 +191,9 @@ def train_xgboost_model(project_id: str, request: TrainRequest) -> Dict[str, Any
             cv_auc,
             feature_importance,
             lift_data,
-            best_params,
+            final_params,
             best_n_estimators,
+            preprocessing_artifacts,
         )
 
         # Update project in database

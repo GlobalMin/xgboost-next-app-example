@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, Field
 from typing import List, Dict, Any, Optional
 
 
@@ -8,8 +8,8 @@ class TrainRequest(BaseModel):
     model_name: str
     csv_filename: str
     target_column: str
-    feature_columns: List[str]
-    test_size: float = 0.2
+    feature_columns: List[str] = Field(..., min_length=1)
+    test_size: float = Field(0.2, gt=0, lt=1)
     cv_folds: int = 3
     tune_parameters: bool = True
     early_stopping_rounds: int = 50

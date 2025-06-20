@@ -75,7 +75,7 @@ class JSONFileHandler(logging.Handler):
 
         # Add project_id if present
         if hasattr(record, "project_id"):
-            log_entry["project_id"] = record.project_id
+            log_entry["project_id"] = getattr(record, "project_id")
 
         # Add any extra fields
         for key, value in record.__dict__.items():

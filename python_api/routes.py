@@ -15,6 +15,7 @@ from models import TrainRequest
 from config import UPLOAD_DIR
 from mongo_utils import create_project, get_project, get_projects, get_training_logs
 from xgb_params import DEFAULT_PARAM_GRID, get_param_info
+from code_generator import generate_training_code
 
 # Create router instance
 router = APIRouter(prefix="/api")
@@ -364,3 +365,67 @@ async def delete_project(project_id: str):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deleting project: {str(e)}")
+
+
+@router.get("/projects/{project_id}/generate-code")
+async def generate_project_code(project_id: str):
+    """Generate standalone Python code to reproduce the XGBoost model training"""
+    try:
+        # Get project details
+        project = get_project(project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        # Check if training is complete
+        if project["status"] != "completed":
+            raise HTTPException(
+                status_code=400, 
+                detail="Code generation is only available for completed models"
+            )
+        
+        # Extract necessary information
+        dataset = project["dataset"]
+        config = project["config"]
+        results = project.get("results", {})
+        
+        # Get preprocessing artifacts
+        preprocessing_artifacts = results.get("preprocessing_artifacts", {})
+        
+        # Get model parameters
+        model_params = results.get("model_params", {})
+        if "objective" in model_params:
+            del model_params["objective"]  # Will be set separately
+        if "eval_metric" in model_params:
+            del model_params["eval_metric"]  # Will be set separately
+        if "seed" in model_params:
+            del model_params["seed"]  # Will be set separately
+        if "nthread" in model_params:
+            del model_params["nthread"]  # Will be set separately
+        
+        # Generate the code
+        code = generate_training_code(
+            csv_filename=dataset["filename"],
+            feature_columns=dataset["feature_columns"],
+            target_column=dataset["target_column"],
+            test_size=config.get("test_size", 0.2),
+            model_params=model_params,
+            preprocessing_artifacts=preprocessing_artifacts,
+            n_estimators=results.get("n_estimators", 100),
+            objective=config.get("objective", "binary:logistic"),
+            eval_metric=config.get("eval_metric", "auc")
+        )
+        
+        return {
+            "project_id": project_id,
+            "project_name": project["name"],
+            "code": code,
+            "filename": f"{project['name'].replace(' ', '_').lower()}_training.py"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Failed to generate code: {str(e)}"
+        )

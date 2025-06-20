@@ -42,7 +42,12 @@ def preprocess_data(
     if y.isnull().any():
         raise ValueError("Target column contains missing values")
 
-    # Separate numeric and categorical columns
+    # Convert datetime columns to strings before processing
+    datetime_columns = X.select_dtypes(include=['datetime', 'datetime64', 'datetime64[ns]']).columns.tolist()
+    for col in datetime_columns:
+        X[col] = X[col].astype(str)
+
+    # Separate numeric and categorical columns (after datetime conversion)
     numeric_columns = X.select_dtypes(include=[np.number]).columns.tolist()
     categorical_columns = X.select_dtypes(include=["object"]).columns.tolist()
 
@@ -50,15 +55,17 @@ def preprocess_data(
     preprocessing_artifacts = {
         "numeric_columns": numeric_columns,
         "categorical_columns": categorical_columns,
+        "datetime_columns": datetime_columns,
         "encoders": {},
         "imputers": {},
     }
 
-    # Handle missing values for numeric features using median imputation
+    # Handle missing values for numeric features
     if numeric_columns:
-        numeric_imputer = SimpleImputer(strategy="median")
-        X[numeric_columns] = numeric_imputer.fit_transform(X[numeric_columns])
-        preprocessing_artifacts["imputers"]["numeric"] = numeric_imputer
+        # For tree-based models, use a special value for missing data
+        # This allows the trees to learn patterns from missingness
+        X[numeric_columns] = X[numeric_columns].fillna(-9999)
+        preprocessing_artifacts["imputers"]["numeric"] = "constant_-9999"
 
     # Handle missing values for categorical features using constant imputation
     if categorical_columns:
@@ -246,16 +253,22 @@ def prepare_results(
     lift_data: List[Dict],
     best_params: Dict[str, Any],
     n_estimators: int,
+    preprocessing_artifacts: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Prepare final results dictionary"""
-    return {
+    results = {
         "test_auc": float(test_auc),
         "cv_auc": float(cv_auc),
         "feature_importance": feature_importance,
         "lift_chart_data": lift_data,
-        "best_params": best_params,
-        "n_estimators_used": int(n_estimators),
+        "model_params": best_params,
+        "n_estimators": int(n_estimators),
     }
+    
+    if preprocessing_artifacts:
+        results["preprocessing_artifacts"] = preprocessing_artifacts
+    
+    return results
 
 
 def tune_hyperparameters(
