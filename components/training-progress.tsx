@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState } from 'react';
-import { Loader2, CheckCircle, Circle } from 'lucide-react';
+import React, { useEffect, useState } from "react";
+import { Loader2, CheckCircle, Circle } from "lucide-react";
 
 interface TrainingProgressProps {
   modelId: number | null;
@@ -21,78 +21,106 @@ interface TrainingStep {
 
 export function TrainingProgress({ modelId }: TrainingProgressProps) {
   const [logs, setLogs] = useState<ProgressLog[]>([]);
-  const [status, setStatus] = useState<string>('training');
+  const [status, setStatus] = useState<string>("training");
   const [steps, setSteps] = useState<TrainingStep[]>([
-    { name: 'Data Preparation', description: 'Loading and preprocessing data', completed: false, active: true },
-    { name: 'Parameter Tuning', description: 'Finding optimal parameters via grid search', completed: false, active: false },
-    { name: 'Model Training', description: 'Training final model with best parameters', completed: false, active: false },
-    { name: 'Evaluation', description: 'Calculating performance metrics', completed: false, active: false },
+    {
+      name: "Data Preparation",
+      description: "Loading and preprocessing data",
+      completed: false,
+      active: true,
+    },
+    {
+      name: "Parameter Tuning",
+      description: "Finding optimal parameters via grid search",
+      completed: false,
+      active: false,
+    },
+    {
+      name: "Model Training",
+      description: "Training final model with best parameters",
+      completed: false,
+      active: false,
+    },
+    {
+      name: "Evaluation",
+      description: "Calculating performance metrics",
+      completed: false,
+      active: false,
+    },
   ]);
 
   useEffect(() => {
     if (!modelId) return;
 
-    const eventSource = new EventSource(`http://localhost:8000/api/models/${modelId}/progress`);
-    
+    const eventSource = new EventSource(
+      `http://localhost:8000/api/models/${modelId}/progress`,
+    );
+
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.error) {
-        console.error('Progress error:', data.error);
+        console.error("Progress error:", data.error);
         eventSource.close();
         return;
       }
-      
+
       setStatus(data.status);
       setLogs(data.logs || []);
-      
+
       // Update steps based on logs
-      const logMessages = (data.logs || []).map(log => log.message).join(' ');
-      
-      setSteps(prevSteps => {
+      const logMessages = (data.logs || []).map((log) => log.message).join(" ");
+
+      setSteps((prevSteps) => {
         const newSteps = [...prevSteps];
-        
+
         // Data Preparation
-        if (logMessages.includes('Dataset loaded') || logMessages.includes('Train/Test split')) {
+        if (
+          logMessages.includes("Dataset loaded") ||
+          logMessages.includes("Train/Test split")
+        ) {
           newSteps[0].completed = true;
           newSteps[0].active = false;
           newSteps[1].active = true;
         }
-        
+
         // Parameter Tuning
-        if (logMessages.includes('Starting grid search') || logMessages.includes('Grid search completed')) {
-          if (logMessages.includes('Grid search completed')) {
+        if (
+          logMessages.includes("Starting grid search") ||
+          logMessages.includes("Grid search completed")
+        ) {
+          if (logMessages.includes("Grid search completed")) {
             newSteps[1].completed = true;
             newSteps[1].active = false;
             newSteps[2].active = true;
           }
         }
-        
+
         // Model Training
-        if (logMessages.includes('Training final model')) {
+        if (logMessages.includes("Training final model")) {
           newSteps[2].active = true;
-          if (logMessages.includes('Training completed!')) {
+          if (logMessages.includes("Training completed!")) {
             newSteps[2].completed = true;
             newSteps[2].active = false;
             newSteps[3].active = true;
           }
         }
-        
+
         // Evaluation
-        if (logMessages.includes('Training completed!')) {
+        if (logMessages.includes("Training completed!")) {
           newSteps[3].completed = true;
           newSteps[3].active = false;
         }
-        
+
         return newSteps;
       });
-      
-      if (data.status === 'completed' || data.status === 'failed') {
+
+      if (data.status === "completed" || data.status === "failed") {
         eventSource.close();
       }
     };
 
     eventSource.onerror = (error) => {
-      console.error('EventSource error:', error);
+      console.error("EventSource error:", error);
       eventSource.close();
     };
 
@@ -108,7 +136,7 @@ export function TrainingProgress({ modelId }: TrainingProgressProps) {
           <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
           <h3 className="text-xl font-semibold">Training Your Model</h3>
         </div>
-        
+
         {/* Progress Steps */}
         <div className="space-y-4 mb-6">
           {steps.map((step, index) => (
@@ -123,11 +151,15 @@ export function TrainingProgress({ modelId }: TrainingProgressProps) {
                 )}
               </div>
               <div className="flex-1">
-                <p className={`font-medium ${
-                  step.completed ? 'text-green-700' : 
-                  step.active ? 'text-blue-700' : 
-                  'text-gray-500'
-                }`}>
+                <p
+                  className={`font-medium ${
+                    step.completed
+                      ? "text-green-700"
+                      : step.active
+                        ? "text-blue-700"
+                        : "text-gray-500"
+                  }`}
+                >
                   {step.name}
                 </p>
                 <p className="text-sm text-gray-600">{step.description}</p>
@@ -135,23 +167,31 @@ export function TrainingProgress({ modelId }: TrainingProgressProps) {
             </div>
           ))}
         </div>
-        
+
         {/* Logs Section */}
         <div className="border-t pt-4">
-          <h4 className="text-sm font-medium text-gray-700 mb-2">Training Logs</h4>
+          <h4 className="text-sm font-medium text-gray-700 mb-2">
+            Training Logs
+          </h4>
           <div className="bg-gray-50 rounded-lg p-3 max-h-48 overflow-y-auto">
             {logs.length === 0 ? (
-              <p className="text-gray-500 text-sm">Initializing training process...</p>
+              <p className="text-gray-500 text-sm">
+                Initializing training process...
+              </p>
             ) : (
               <div className="space-y-1">
-                {logs.slice().reverse().slice(0, 10).map((log, index) => (
-                  <div key={index} className="text-xs">
-                    <span className="text-gray-500 font-mono">
-                      {new Date(log.timestamp).toLocaleTimeString()}
-                    </span>
-                    <span className="ml-2 text-gray-700">{log.message}</span>
-                  </div>
-                ))}
+                {logs
+                  .slice()
+                  .reverse()
+                  .slice(0, 10)
+                  .map((log, index) => (
+                    <div key={index} className="text-xs">
+                      <span className="text-gray-500 font-mono">
+                        {new Date(log.timestamp).toLocaleTimeString()}
+                      </span>
+                      <span className="ml-2 text-gray-700">{log.message}</span>
+                    </div>
+                  ))}
               </div>
             )}
           </div>

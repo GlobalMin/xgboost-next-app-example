@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import React, { useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 
 interface DataPreviewProps {
   data: {
@@ -21,7 +21,7 @@ interface DataPreviewProps {
 
 export function DataPreview({ data, onTrain }: DataPreviewProps) {
   const [showPreview, setShowPreview] = useState(true);
-  const [targetColumn, setTargetColumn] = useState('');
+  const [targetColumn, setTargetColumn] = useState("");
   const [featureColumns, setFeatureColumns] = useState<string[]>([]);
   const [params, setParams] = useState({
     testSize: 0.2,
@@ -32,28 +32,32 @@ export function DataPreview({ data, onTrain }: DataPreviewProps) {
 
   const handleFeatureToggle = (column: string) => {
     if (column === targetColumn) return;
-    
-    setFeatureColumns(prev =>
+
+    setFeatureColumns((prev) =>
       prev.includes(column)
-        ? prev.filter(c => c !== column)
-        : [...prev, column]
+        ? prev.filter((c) => c !== column)
+        : [...prev, column],
     );
   };
 
   const handleTargetSelect = (column: string) => {
     setTargetColumn(column);
-    setFeatureColumns(prev => prev.filter(c => c !== column));
+    setFeatureColumns((prev) => prev.filter((c) => c !== column));
   };
 
   const handleTrain = () => {
     if (!targetColumn || featureColumns.length === 0) {
-      alert('Please select a target column and at least one feature');
+      alert("Please select a target column and at least one feature");
       return;
     }
 
     // Auto-generate model name based on dataset and timestamp
-    const timestamp = new Date().toISOString().slice(0, 19).replace(/[-:]/g, '').replace('T', '_');
-    const datasetName = data.filename.replace('.csv', '');
+    const timestamp = new Date()
+      .toISOString()
+      .slice(0, 19)
+      .replace(/[-:]/g, "")
+      .replace("T", "_");
+    const datasetName = data.filename.replace(".csv", "");
     const modelName = `${datasetName}_${targetColumn}_${timestamp}`;
 
     onTrain({
@@ -73,7 +77,8 @@ export function DataPreview({ data, onTrain }: DataPreviewProps) {
             <span className="font-medium">Filename:</span> {data.filename}
           </div>
           <div>
-            <span className="font-medium">Shape:</span> {data.shape[0]} rows × {data.shape[1]} columns
+            <span className="font-medium">Shape:</span> {data.shape[0]} rows ×{" "}
+            {data.shape[1]} columns
           </div>
         </div>
       </div>
@@ -83,16 +88,20 @@ export function DataPreview({ data, onTrain }: DataPreviewProps) {
           onClick={() => setShowPreview(!showPreview)}
           className="flex items-center space-x-2 text-lg font-semibold mb-4"
         >
-          {showPreview ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+          {showPreview ? (
+            <ChevronDown className="h-5 w-5" />
+          ) : (
+            <ChevronRight className="h-5 w-5" />
+          )}
           <span>Data Preview</span>
         </button>
-        
+
         {showPreview && (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  {data.columns.map(column => (
+                  {data.columns.map((column) => (
                     <th
                       key={column}
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
@@ -105,9 +114,12 @@ export function DataPreview({ data, onTrain }: DataPreviewProps) {
               <tbody className="bg-white divide-y divide-gray-200">
                 {data.preview.slice(0, 5).map((row, idx) => (
                   <tr key={idx}>
-                    {data.columns.map(column => (
-                      <td key={column} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {row[column]?.toString() || '-'}
+                    {data.columns.map((column) => (
+                      <td
+                        key={column}
+                        className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"
+                      >
+                        {row[column]?.toString() || "-"}
                       </td>
                     ))}
                   </tr>
@@ -120,7 +132,7 @@ export function DataPreview({ data, onTrain }: DataPreviewProps) {
 
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-xl font-semibold mb-4">Model Configuration</h2>
-        
+
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -132,7 +144,7 @@ export function DataPreview({ data, onTrain }: DataPreviewProps) {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">Select target column</option>
-              {data.columns.map(column => (
+              {data.columns.map((column) => (
                 <option key={column} value={column}>
                   {column} ({data.dtypes[column]})
                 </option>
@@ -145,11 +157,13 @@ export function DataPreview({ data, onTrain }: DataPreviewProps) {
               Feature Columns
             </label>
             <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded-md p-3">
-              {data.columns.map(column => (
+              {data.columns.map((column) => (
                 <label
                   key={column}
                   className={`flex items-center space-x-2 ${
-                    column === targetColumn ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                    column === targetColumn
+                      ? "opacity-50 cursor-not-allowed"
+                      : "cursor-pointer"
                   }`}
                 >
                   <input
@@ -175,7 +189,9 @@ export function DataPreview({ data, onTrain }: DataPreviewProps) {
               <input
                 type="number"
                 value={params.testSize}
-                onChange={(e) => setParams({...params, testSize: parseFloat(e.target.value)})}
+                onChange={(e) =>
+                  setParams({ ...params, testSize: parseFloat(e.target.value) })
+                }
                 min="0.1"
                 max="0.5"
                 step="0.1"
@@ -189,7 +205,9 @@ export function DataPreview({ data, onTrain }: DataPreviewProps) {
               <input
                 type="number"
                 value={params.cvFolds}
-                onChange={(e) => setParams({...params, cvFolds: parseInt(e.target.value)})}
+                onChange={(e) =>
+                  setParams({ ...params, cvFolds: parseInt(e.target.value) })
+                }
                 min="2"
                 max="10"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
@@ -202,7 +220,12 @@ export function DataPreview({ data, onTrain }: DataPreviewProps) {
               <input
                 type="number"
                 value={params.earlyStoppingRounds}
-                onChange={(e) => setParams({...params, earlyStoppingRounds: parseInt(e.target.value)})}
+                onChange={(e) =>
+                  setParams({
+                    ...params,
+                    earlyStoppingRounds: parseInt(e.target.value),
+                  })
+                }
                 min="10"
                 max="200"
                 step="10"
@@ -214,7 +237,9 @@ export function DataPreview({ data, onTrain }: DataPreviewProps) {
                 <input
                   type="checkbox"
                   checked={params.tuneParameters}
-                  onChange={(e) => setParams({...params, tuneParameters: e.target.checked})}
+                  onChange={(e) =>
+                    setParams({ ...params, tuneParameters: e.target.checked })
+                  }
                   className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                 />
                 <span className="text-sm font-medium text-gray-700">

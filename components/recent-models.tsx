@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { Clock, TrendingUp, AlertCircle, CheckCircle } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { Clock, TrendingUp, AlertCircle, CheckCircle } from "lucide-react";
 
 interface RecentModelsProps {
   onSelectModel: (modelId: number) => void;
@@ -17,13 +17,13 @@ export function RecentModels({ onSelectModel }: RecentModelsProps) {
 
   const fetchModels = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/models');
+      const response = await fetch("http://localhost:8000/api/models");
       if (response.ok) {
         const data = await response.json();
         setModels(data.slice(0, 5)); // Show only 5 most recent
       }
     } catch (error) {
-      console.error('Failed to fetch models:', error);
+      console.error("Failed to fetch models:", error);
     } finally {
       setLoading(false);
     }
@@ -31,9 +31,9 @@ export function RecentModels({ onSelectModel }: RecentModelsProps) {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'completed':
+      case "completed":
         return <CheckCircle className="h-4 w-4 text-green-500" />;
-      case 'failed':
+      case "failed":
         return <AlertCircle className="h-4 w-4 text-red-500" />;
       default:
         return <Clock className="h-4 w-4 text-yellow-500" />;
@@ -42,7 +42,7 @@ export function RecentModels({ onSelectModel }: RecentModelsProps) {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+    return date.toLocaleDateString() + " " + date.toLocaleTimeString();
   };
 
   if (loading) {
@@ -66,7 +66,9 @@ export function RecentModels({ onSelectModel }: RecentModelsProps) {
           <div
             key={model.id}
             className="border rounded-lg p-3 hover:bg-gray-50 cursor-pointer transition-colors"
-            onClick={() => model.status === 'completed' && onSelectModel(model.id)}
+            onClick={() =>
+              model.status === "completed" && onSelectModel(model.id)
+            }
           >
             <div className="flex items-start justify-between">
               <div className="flex-1">

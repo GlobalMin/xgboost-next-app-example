@@ -1,13 +1,12 @@
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
-import sqlite3
-import os
 
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "xgboost_models.db")
+# DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "xgboost_models.db")
+
 
 class TrainRequest(BaseModel):
     model_config = {"protected_namespaces": ()}
-    
+
     model_name: str
     csv_filename: str
     target_column: str
@@ -18,9 +17,10 @@ class TrainRequest(BaseModel):
     early_stopping_rounds: int = 50
     objective: str = "binary:logistic"
 
+
 class ModelInfo(BaseModel):
     model_config = {"protected_namespaces": ()}
-    
+
     id: int
     name: str
     created_at: str
@@ -34,7 +34,8 @@ class ModelInfo(BaseModel):
     confusion_matrix: Optional[List[List[int]]] = None
     status: str
 
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+
+# def get_db():
+#     conn = sqlite3.connect(DB_PATH)
+#     conn.row_factory = sqlite3.Row
+#     return conn

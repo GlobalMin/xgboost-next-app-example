@@ -18,6 +18,7 @@
 __pycache__
 # testing
 /coverage
+*/models/
 
 # next.js
 /.next/

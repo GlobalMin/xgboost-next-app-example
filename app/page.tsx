@@ -1,12 +1,12 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { CSVUpload } from '@/components/csv-upload';
-import { DataPreview } from '@/components/data-preview';
-import { ModelResults } from '@/components/model-results';
-import { TrainingProgress } from '@/components/training-progress';
-import { ModelLookup } from '@/components/model-lookup';
-import { RecentModels } from '@/components/recent-models';
+import { useState } from "react";
+import { CSVUpload } from "@/components/csv-upload";
+import { DataPreview } from "@/components/data-preview";
+import { ModelResults } from "@/components/model-results";
+import { TrainingProgress } from "@/components/training-progress";
+import { ModelLookup } from "@/components/model-lookup";
+import { RecentModels } from "@/components/recent-models";
 
 export default function Home() {
   const [uploadedData, setUploadedData] = useState<any>(null);
@@ -26,12 +26,12 @@ export default function Home() {
     params: any;
   }) => {
     setTraining(true);
-    
+
     try {
-      const response = await fetch('http://localhost:8000/api/train', {
-        method: 'POST',
+      const response = await fetch("http://localhost:8000/api/train", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           model_name: config.modelName,
@@ -46,18 +46,20 @@ export default function Home() {
       });
 
       if (!response.ok) {
-        throw new Error('Training failed');
+        throw new Error("Training failed");
       }
 
       const result = await response.json();
       setTrainingModelId(result.model_id);
-      
+
       // Poll for completion
       const checkStatus = setInterval(async () => {
-        const statusResponse = await fetch(`http://localhost:8000/api/models/${result.model_id}`);
+        const statusResponse = await fetch(
+          `http://localhost:8000/api/models/${result.model_id}`,
+        );
         if (statusResponse.ok) {
           const modelData = await statusResponse.json();
-          if (modelData.status === 'completed') {
+          if (modelData.status === "completed") {
             clearInterval(checkStatus);
             // Add a 1-second pause before showing results
             setTimeout(() => {
@@ -69,17 +71,17 @@ export default function Home() {
               setTraining(false);
               setTrainingModelId(null);
             }, 1000);
-          } else if (modelData.status === 'failed') {
+          } else if (modelData.status === "failed") {
             setTraining(false);
             setTrainingModelId(null);
             clearInterval(checkStatus);
-            alert('Training failed. Check the logs for details.');
+            alert("Training failed. Check the logs for details.");
           }
         }
       }, 2000);
     } catch (error) {
-      console.error('Training error:', error);
-      alert('Training failed. Please check the console for details.');
+      console.error("Training error:", error);
+      alert("Training failed. Please check the console for details.");
       setTraining(false);
       setTrainingModelId(null);
     }
@@ -87,14 +89,16 @@ export default function Home() {
 
   const handleModelLookup = async (modelId: number) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/models/${modelId}`);
+      const response = await fetch(
+        `http://localhost:8000/api/models/${modelId}`,
+      );
       if (response.ok) {
         const model = await response.json();
         setCurrentModel(model);
         setUploadedData(null);
       }
     } catch (error) {
-      console.error('Failed to fetch model:', error);
+      console.error("Failed to fetch model:", error);
     }
   };
 
@@ -119,15 +123,13 @@ export default function Home() {
               <RecentModels onSelectModel={handleModelLookup} />
             </div>
           )}
-          
+
           {uploadedData && !currentModel && !training && (
             <DataPreview data={uploadedData} onTrain={handleTrain} />
           )}
-          
-          {training && (
-            <TrainingProgress modelId={trainingModelId} />
-          )}
-          
+
+          {training && <TrainingProgress modelId={trainingModelId} />}
+
           {currentModel && (
             <>
               <ModelResults model={currentModel} />

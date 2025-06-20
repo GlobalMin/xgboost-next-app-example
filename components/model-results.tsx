@@ -1,8 +1,15 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { CheckCircle, AlertCircle, TrendingUp, FileText, ChevronDown, ChevronUp } from 'lucide-react';
-import { LiftChart } from './lift-chart';
+import React, { useState, useEffect } from "react";
+import {
+  CheckCircle,
+  AlertCircle,
+  TrendingUp,
+  FileText,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
+import { LiftChart } from "./lift-chart";
 
 interface ModelResultsProps {
   model: {
@@ -21,7 +28,9 @@ interface ModelResultsProps {
 }
 
 export function ModelResults({ model }: ModelResultsProps) {
-  const [logs, setLogs] = useState<{ message: string; timestamp: string }[]>([]);
+  const [logs, setLogs] = useState<{ message: string; timestamp: string }[]>(
+    [],
+  );
   const [showLogs, setShowLogs] = useState(false);
   const [logsLoading, setLogsLoading] = useState(false);
 
@@ -34,13 +43,15 @@ export function ModelResults({ model }: ModelResultsProps) {
   const fetchLogs = async () => {
     setLogsLoading(true);
     try {
-      const response = await fetch(`http://localhost:8000/api/models/${model.id}/logs`);
+      const response = await fetch(
+        `http://localhost:8000/api/models/${model.id}/logs`,
+      );
       if (response.ok) {
         const data = await response.json();
         setLogs(data.logs || []);
       }
     } catch (error) {
-      console.error('Error fetching logs:', error);
+      console.error("Error fetching logs:", error);
     } finally {
       setLogsLoading(false);
     }
@@ -48,30 +59,35 @@ export function ModelResults({ model }: ModelResultsProps) {
 
   const featureData = Object.entries(model.feature_importance || {})
     .map(([feature, importance]) => {
-      const value = typeof importance === 'number' ? importance : parseFloat(String(importance));
+      const value =
+        typeof importance === "number"
+          ? importance
+          : parseFloat(String(importance));
       return {
         feature,
         importance: isNaN(value) ? 0 : value,
       };
     })
-    .filter(item => item.importance > 0) // Filter out zero importance
+    .filter((item) => item.importance > 0) // Filter out zero importance
     .sort((a, b) => b.importance - a.importance)
     .slice(0, 15); // Show top 15 features
 
   const getStatusIcon = () => {
-    if (model.status === 'completed') {
+    if (model.status === "completed") {
       return <CheckCircle className="h-5 w-5 text-green-500" />;
     }
     return <AlertCircle className="h-5 w-5 text-yellow-500" />;
   };
 
-  if (model.status !== 'completed') {
+  if (model.status !== "completed") {
     return (
       <div className="w-full max-w-6xl mx-auto p-6">
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center space-x-2">
             {getStatusIcon()}
-            <h2 className="text-xl font-semibold">Model Training in Progress...</h2>
+            <h2 className="text-xl font-semibold">
+              Model Training in Progress...
+            </h2>
           </div>
           <p className="mt-2 text-gray-600">
             Please wait while your model is being trained with parameter tuning.
@@ -103,9 +119,11 @@ export function ModelResults({ model }: ModelResultsProps) {
             <p className="text-3xl font-bold text-blue-600">
               {((model.test_auc_score || model.auc_score) * 100).toFixed(2)}%
             </p>
-            <p className="text-sm text-blue-700 mt-1">Out-of-sample performance</p>
+            <p className="text-sm text-blue-700 mt-1">
+              Out-of-sample performance
+            </p>
           </div>
-          
+
           {model.cv_auc_score !== undefined && (
             <div className="bg-green-50 rounded-lg p-4">
               <div className="flex items-center space-x-2 mb-2">
@@ -115,17 +133,23 @@ export function ModelResults({ model }: ModelResultsProps) {
               <p className="text-3xl font-bold text-green-600">
                 {(model.cv_auc_score * 100).toFixed(2)}%
               </p>
-              <p className="text-sm text-green-700 mt-1">Cross-validation average</p>
+              <p className="text-sm text-green-700 mt-1">
+                Cross-validation average
+              </p>
             </div>
           )}
-          
+
           {model.n_estimators_used !== undefined && (
             <div className="bg-purple-50 rounded-lg p-4">
-              <h3 className="text-lg font-medium text-purple-900 mb-2">Trees Used</h3>
+              <h3 className="text-lg font-medium text-purple-900 mb-2">
+                Trees Used
+              </h3>
               <p className="text-3xl font-bold text-purple-600">
                 {model.n_estimators_used}
               </p>
-              <p className="text-sm text-purple-700 mt-1">Stopped at iteration {model.n_estimators_used}</p>
+              <p className="text-sm text-purple-700 mt-1">
+                Stopped at iteration {model.n_estimators_used}
+              </p>
             </div>
           )}
         </div>
@@ -140,9 +164,11 @@ export function ModelResults({ model }: ModelResultsProps) {
         {featureData.length > 0 ? (
           <div className="space-y-3">
             {featureData.map((item, index) => {
-              const maxImportance = Math.max(...featureData.map(d => d.importance));
+              const maxImportance = Math.max(
+                ...featureData.map((d) => d.importance),
+              );
               const percentage = (item.importance / maxImportance) * 100;
-              
+
               return (
                 <div key={index} className="flex items-center space-x-3">
                   <div className="w-32 text-sm font-medium text-gray-700 text-right">
@@ -167,7 +193,9 @@ export function ModelResults({ model }: ModelResultsProps) {
             })}
           </div>
         ) : (
-          <p className="text-gray-500 text-center py-8">No feature importance data available</p>
+          <p className="text-gray-500 text-center py-8">
+            No feature importance data available
+          </p>
         )}
       </div>
 
@@ -178,10 +206,12 @@ export function ModelResults({ model }: ModelResultsProps) {
             {Object.entries(model.best_params).map(([param, value]) => (
               <div key={param} className="bg-gray-50 rounded p-3">
                 <p className="text-sm font-medium text-gray-600">
-                  {param.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                  {param
+                    .replace(/_/g, " ")
+                    .replace(/\b\w/g, (l) => l.toUpperCase())}
                 </p>
                 <p className="text-lg font-semibold text-gray-900">
-                  {typeof value === 'number' ? value.toFixed(3) : value}
+                  {typeof value === "number" ? value.toFixed(3) : value}
                 </p>
               </div>
             ))}
@@ -190,7 +220,7 @@ export function ModelResults({ model }: ModelResultsProps) {
       )}
 
       <div className="bg-white rounded-lg shadow p-6">
-        <div 
+        <div
           className="flex items-center justify-between cursor-pointer"
           onClick={() => setShowLogs(!showLogs)}
         >
@@ -204,7 +234,7 @@ export function ModelResults({ model }: ModelResultsProps) {
             <ChevronDown className="h-5 w-5 text-gray-600" />
           )}
         </div>
-        
+
         {showLogs && (
           <div className="mt-4">
             {logsLoading ? (
@@ -212,7 +242,10 @@ export function ModelResults({ model }: ModelResultsProps) {
             ) : logs.length > 0 ? (
               <div className="space-y-2 max-h-96 overflow-y-auto bg-gray-50 rounded p-4">
                 {logs.map((log, index) => (
-                  <div key={index} className="text-sm border-b border-gray-200 pb-2">
+                  <div
+                    key={index}
+                    className="text-sm border-b border-gray-200 pb-2"
+                  >
                     <span className="text-gray-500 font-mono">
                       {new Date(log.timestamp).toLocaleTimeString()}
                     </span>
@@ -221,7 +254,9 @@ export function ModelResults({ model }: ModelResultsProps) {
                 ))}
               </div>
             ) : (
-              <p className="text-gray-500 text-center py-4">No training logs available</p>
+              <p className="text-gray-500 text-center py-4">
+                No training logs available
+              </p>
             )}
           </div>
         )}
