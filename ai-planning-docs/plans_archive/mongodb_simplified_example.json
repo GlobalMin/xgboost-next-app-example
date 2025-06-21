@@ -1,0 +1,200 @@
+{
+  "_id": {"$oid": "6856f57bdb57ce1f6256ef8b"},
+  "project_name": "Employee_LeaveOrNot_20250621_181003",
+  "created_at": {"$date": "2025-06-21T18:10:03.496Z"},
+  "updated_at": {"$date": "2025-06-21T18:10:33.698Z"},
+  "status": "completed",
+  
+  "dataset": {
+    "filename": "Employee.csv",
+    "upload_date": {"$date": "2025-06-21T18:10:03.496Z"},
+    "row_count": 4653,
+    "column_count": 10,
+    "target_column": "LeaveOrNot",
+    "feature_columns": ["Gender", "City", "PaymentTier", "JoiningYear", "Education", "EverBenched"],
+    "column_types": {
+      "numeric": ["PaymentTier", "JoiningYear"],
+      "categorical": ["Gender", "City", "Education", "EverBenched"],
+      "datetime": []
+    },
+    "missing_values": {
+      "JoiningYear": 23
+    }
+  },
+  
+  "preprocessing": {
+    "pipeline_definition": {
+      "steps": [
+        {
+          "name": "datetime_converter",
+          "type": "custom",
+          "class": "DatetimeToString"
+        },
+        {
+          "name": "column_transformer",
+          "type": "sklearn.compose.ColumnTransformer",
+          "transformers": [
+            {
+              "name": "numeric",
+              "transformer": "Pipeline",
+              "columns": ["PaymentTier", "JoiningYear"],
+              "steps": [
+                {
+                  "name": "imputer",
+                  "type": "SimpleImputer",
+                  "params": {"strategy": "constant", "fill_value": -9999}
+                }
+              ]
+            },
+            {
+              "name": "categorical",
+              "transformer": "Pipeline",
+              "columns": ["Gender", "City", "Education", "EverBenched"],
+              "steps": [
+                {
+                  "name": "imputer",
+                  "type": "SimpleImputer",
+                  "params": {"strategy": "constant", "fill_value": "missing"}
+                },
+                {
+                  "name": "encoder",
+                  "type": "OrdinalEncoder",
+                  "params": {"handle_unknown": "use_encoded_value", "unknown_value": -1}
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "feature_mappings": {
+      "Gender": {"Female": 0, "Male": 1},
+      "City": {"Bangalore": 0, "New Delhi": 1, "Pune": 2},
+      "Education": {"Bachelors": 0, "Masters": 1, "PHD": 2},
+      "EverBenched": {"No": 0, "Yes": 1}
+    },
+    "pipeline_code": "# Preprocessing pipeline definition\nnumeric_columns = ['PaymentTier', 'JoiningYear']\ncategorical_columns = ['Gender', 'City', 'Education', 'EverBenched']\n\nnumeric_transformer = Pipeline(steps=[\n    ('imputer', SimpleImputer(strategy='constant', fill_value=-9999))\n])\n\ncategorical_transformer = Pipeline(steps=[\n    ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),\n    ('encoder', OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1))\n])\n\npreprocessor = ColumnTransformer(\n    transformers=[\n        ('num', numeric_transformer, numeric_columns),\n        ('cat', categorical_transformer, categorical_columns)\n    ],\n    remainder='passthrough',\n    sparse_threshold=0\n)\n\nfull_pipeline = Pipeline(steps=[\n    ('datetime_converter', DatetimeToString()),\n    ('preprocessor', preprocessor)\n])"
+  },
+  
+  "model_config": {
+    "algorithm": "xgboost",
+    "objective": "binary:logistic",
+    "test_size": 0.2,
+    "random_state": 42,
+    "cv_folds": 3,
+    "early_stopping_rounds": 50,
+    "eval_metric": "auc"
+  },
+  
+  "tuning": {
+    "search_method": "grid_search",
+    "param_grid": {
+      "max_depth": [3, 4, 5],
+      "learning_rate": [0.01, 0.1, 0.3],
+      "n_estimators": [100, 200],
+      "subsample": [0.8, 1.0],
+      "colsample_bytree": [0.8, 1.0],
+      "reg_lambda": [0.5, 1.0]
+    },
+    "cv_results": [
+      {
+        "params": {"max_depth": 4, "learning_rate": 0.1, "n_estimators": 100, "subsample": 0.8, "colsample_bytree": 0.8, "reg_lambda": 0.5},
+        "mean_score": 0.8638,
+        "std_score": 0.0234,
+        "rank": 1
+      },
+      {
+        "params": {"max_depth": 3, "learning_rate": 0.1, "n_estimators": 100, "subsample": 0.8, "colsample_bytree": 0.8, "reg_lambda": 0.5},
+        "mean_score": 0.8523,
+        "std_score": 0.0312,
+        "rank": 2
+      }
+    ],
+    "best_params": {
+      "max_depth": 4,
+      "learning_rate": 0.1,
+      "n_estimators": 100,
+      "subsample": 0.8,
+      "colsample_bytree": 0.8,
+      "reg_lambda": 0.5
+    },
+    "best_score": 0.8638,
+    "tuning_duration_seconds": 45.23
+  },
+  
+  "final_model": {
+    "params": {
+      "max_depth": 4,
+      "learning_rate": 0.1,
+      "n_estimators": 100,
+      "subsample": 0.8,
+      "colsample_bytree": 0.8,
+      "reg_lambda": 0.5,
+      "objective": "binary:logistic",
+      "eval_metric": "auc"
+    },
+    "n_estimators": 62,
+    "training_duration_seconds": 12.34,
+    "model_file_path": "models/6856f57bdb57ce1f6256ef8b.json",
+    "model_size_bytes": 45678,
+    "feature_names": ["PaymentTier", "JoiningYear", "Gender", "City", "Education", "EverBenched"]
+  },
+  
+  "evaluation": {
+    "metrics": {
+      "train": {
+        "auc": 0.9123,
+        "accuracy": 0.8756,
+        "precision": 0.8234,
+        "recall": 0.8912,
+        "f1": 0.8560
+      },
+      "cv": {
+        "auc_mean": 0.8638,
+        "auc_std": 0.0234,
+        "accuracy_mean": 0.8234,
+        "accuracy_std": 0.0156
+      },
+      "test": {
+        "auc": 0.8665,
+        "accuracy": 0.8312,
+        "precision": 0.7923,
+        "recall": 0.8534,
+        "f1": 0.8217,
+        "confusion_matrix": [[234, 56], [45, 189]]
+      }
+    },
+    "feature_importance": {
+      "JoiningYear": 29.14,
+      "Education": 11.26,
+      "PaymentTier": 11.03,
+      "City": 10.20,
+      "Gender": 9.48,
+      "EverBenched": 2.11
+    },
+    "lift_chart": {
+      "bins": 10,
+      "data": [
+        {"bin": 1, "avg_prediction": 0.0678, "actual_rate": 0.0385, "lift": 0.568, "count": 104},
+        {"bin": 2, "avg_prediction": 0.1129, "actual_rate": 0.1091, "lift": 0.968, "count": 110},
+        {"bin": 3, "avg_prediction": 0.1444, "actual_rate": 0.1848, "lift": 1.280, "count": 92},
+        {"bin": 4, "avg_prediction": 0.1529, "actual_rate": 0.1220, "lift": 0.798, "count": 82},
+        {"bin": 5, "avg_prediction": 0.1691, "actual_rate": 0.1319, "lift": 0.780, "count": 91},
+        {"bin": 6, "avg_prediction": 0.2143, "actual_rate": 0.1446, "lift": 0.675, "count": 83},
+        {"bin": 7, "avg_prediction": 0.3430, "actual_rate": 0.3478, "lift": 1.014, "count": 92},
+        {"bin": 8, "avg_prediction": 0.4948, "actual_rate": 0.5000, "lift": 1.011, "count": 94},
+        {"bin": 9, "avg_prediction": 0.8254, "actual_rate": 0.9126, "lift": 1.106, "count": 103},
+        {"bin": 10, "avg_prediction": 0.9744, "actual_rate": 1.0000, "lift": 1.027, "count": 80}
+      ]
+    }
+  },
+  
+  "metadata": {
+    "description": "Predict employee attrition based on HR data",
+    "tags": ["hr-analytics", "binary-classification"],
+    "custom_fields": {
+      "department": "HR",
+      "requester": "John Doe"
+    }
+  }
+}

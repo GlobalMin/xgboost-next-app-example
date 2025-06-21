@@ -6,6 +6,13 @@ import xgboost as xgb
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder, OrdinalEncoder
 from sklearn.impute import SimpleImputer
+from sklearn.metrics import (
+    accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score,
+    confusion_matrix,
+)
 from typing import Dict, Any, Tuple, List, Optional
 import os
 from itertools import product
@@ -242,6 +249,29 @@ def compute_lift_chart_data(
     return lift_data
 
 
+def calculate_test_metrics(
+    y_true: np.ndarray, y_pred_proba: np.ndarray, threshold: float = 0.5
+) -> Dict[str, Any]:
+    """Calculate additional test metrics for binary classification"""
+    # Convert probabilities to binary predictions
+    y_pred = (y_pred_proba >= threshold).astype(int)
+
+    # Calculate metrics
+    accuracy = accuracy_score(y_true, y_pred)
+    precision = precision_score(y_true, y_pred, zero_division=0)
+    recall = recall_score(y_true, y_pred, zero_division=0)
+    f1 = f1_score(y_true, y_pred, zero_division=0)
+    conf_matrix = confusion_matrix(y_true, y_pred)
+
+    return {
+        "test_accuracy": float(accuracy),
+        "test_precision": float(precision),
+        "test_recall": float(recall),
+        "test_f1": float(f1),
+        "confusion_matrix": conf_matrix.tolist(),
+    }
+
+
 def write_model_file(model: xgb.Booster, project_id: str) -> str:
     """Atomic: Save XGBoost model to file"""
     model_path = os.path.join(MODEL_DIR, f"{project_id}.json")
@@ -257,16 +287,28 @@ def build_results_dict(
     best_params: Dict[str, Any],
     n_estimators: int,
     preprocessing_artifacts: Optional[Dict[str, Any]] = None,
+    test_metrics: Optional[Dict[str, float]] = None,
+    feature_names: Optional[List[str]] = None,
+    cv_auc_std: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Atomic: Prepare final results dictionary"""
     results = {
         "test_auc": float(test_auc),
         "cv_auc": float(cv_auc),
+        "cv_auc_std": float(cv_auc_std) if cv_auc_std is not None else None,
         "feature_importance": feature_importance,
         "lift_chart_data": lift_data,
         "model_params": best_params,
         "n_estimators": int(n_estimators),
     }
+
+    # Add feature names if provided
+    if feature_names:
+        results["feature_names"] = feature_names
+
+    # Add additional test metrics if provided
+    if test_metrics:
+        results.update(test_metrics)
 
     if preprocessing_artifacts:
         results["preprocessing_artifacts"] = preprocessing_artifacts
@@ -281,11 +323,11 @@ def execute_hyperparameter_search(
     cv_folds: int,
     early_stopping_rounds: int,
     project_id: str,
-) -> Tuple[Dict[str, Any], float, int]:
+) -> Tuple[Dict[str, Any], float, int, float]:
     """Multi-step: Tune hyperparameters using grid search
 
     Returns:
-        Tuple of (best_params, best_score, best_n_estimators)
+        Tuple of (best_params, best_score, best_n_estimators, best_std)
     """
     param_combinations = build_param_grid(param_grid)
     logger.info(
@@ -294,6 +336,7 @@ def execute_hyperparameter_search(
     )
 
     best_score = -np.inf
+    best_std = 0.0
     best_params = {}
     best_n_estimators = 100
 
@@ -302,12 +345,13 @@ def execute_hyperparameter_search(
         cv_params = {"objective": objective}
         cv_params.update(params)
 
-        mean_score, _, optimal_rounds = run_cross_validation(
+        mean_score, std_score, optimal_rounds = run_cross_validation(
             dtrain, cv_params, cv_folds, 500, early_stopping_rounds
         )
 
         if mean_score > best_score:
             best_score = mean_score
+            best_std = std_score
             best_params = params.copy()
             best_n_estimators = optimal_rounds
 
@@ -323,4 +367,4 @@ def execute_hyperparameter_search(
         extra={"project_id": project_id},
     )
 
-    return best_params, best_score, best_n_estimators
+    return best_params, best_score, best_n_estimators, best_std

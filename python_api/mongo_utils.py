@@ -51,28 +51,52 @@ LOGS_COLLECTION = os.getenv("LOGS_COLLECTION", "training_logs")
 
 # Helper functions
 def create_project(project_data: Dict[str, Any]) -> str:
-    """Create a new project document in MongoDB"""
+    """Create a new project document in MongoDB with new schema"""
     db = mongo_conn.get_database()
 
     project_doc = {
-        "name": project_data["name"],
+        "project_name": project_data["name"],
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow(),
         "status": "training",
+        # Group 1: Dataset Information
         "dataset": {
             "filename": project_data["csv_filename"],
+            "upload_date": datetime.utcnow(),
             "target_column": project_data["target_column"],
             "feature_columns": project_data["feature_columns"],
-            "upload_date": datetime.utcnow(),
+            # These will be populated during preprocessing
+            "column_types": {"numeric": [], "categorical": [], "datetime": []},
+            "missing_values": {},
+            "row_count": None,
+            "column_count": None,
         },
-        "config": {
+        # Group 2: Model Configuration
+        "model_config": {
+            "algorithm": "xgboost",
+            "objective": project_data.get("objective", "binary:logistic"),
             "test_size": project_data.get("test_size", 0.2),
+            "random_state": project_data.get("random_state", 42),
             "cv_folds": project_data.get("cv_folds", 5),
             "early_stopping_rounds": project_data.get("early_stopping_rounds", 50),
-            "objective": project_data.get("objective", "binary:logistic"),
+            "eval_metric": "auc",  # Default for binary classification
         },
-        "metadata": {},
+        # Group 3: Metadata
+        "metadata": project_data.get("metadata", {}),
+        # Groups that will be populated later:
+        # - preprocessing
+        # - tuning
+        # - final_model
+        # - evaluation
+        # - error (if failed)
     }
+
+    # Add custom hyperparameter grid if provided
+    if "custom_param_grid" in project_data:
+        project_doc["tuning"] = {
+            "search_method": "grid_search",
+            "param_grid": project_data["custom_param_grid"],
+        }
 
     result = db[PROJECTS_COLLECTION].insert_one(project_doc)
     return str(result.inserted_id)
@@ -90,22 +114,79 @@ def update_project_status(project_id: str, status: str) -> bool:
 
 
 def update_project_results(project_id: str, results: Dict[str, Any]) -> bool:
-    """Update project with training results"""
+    """Update project with training results using new schema"""
     db = mongo_conn.get_database()
 
     # Ensure all numeric values are JSON serializable
     clean_results = json.loads(json.dumps(results, default=str))
 
-    result = db[PROJECTS_COLLECTION].update_one(
-        {"_id": ObjectId(project_id)},
-        {
-            "$set": {
-                "status": "completed",
-                "updated_at": datetime.utcnow(),
-                "results": clean_results,
-                "model_file": f"models/{project_id}.json",
-            }
+    # Reorganize results into new schema structure
+    update_doc = {
+        "status": "completed",
+        "updated_at": datetime.utcnow(),
+        # Update dataset info with discovered column types
+        "dataset.column_types": clean_results.get("preprocessing_artifacts", {}).get(
+            "column_types",
+            {
+                "numeric": clean_results.get("preprocessing_artifacts", {}).get(
+                    "numeric_columns", []
+                ),
+                "categorical": clean_results.get("preprocessing_artifacts", {}).get(
+                    "categorical_columns", []
+                ),
+                "datetime": clean_results.get("preprocessing_artifacts", {}).get(
+                    "datetime_columns", []
+                ),
+            },
+        ),
+        # Preprocessing group
+        "preprocessing": {
+            "pipeline_definition": clean_results.get("preprocessing_artifacts", {}).get(
+                "pipeline_definition", {}
+            ),
+            "feature_mappings": clean_results.get("preprocessing_artifacts", {}).get(
+                "encoders", {}
+            ),
+            "pipeline_code": clean_results.get("preprocessing_artifacts", {}).get(
+                "pipeline_code", ""
+            ),
         },
+        # Tuning group (if hyperparameter tuning was done)
+        "tuning.best_params": clean_results.get("model_params", {}),
+        "tuning.best_score": clean_results.get("cv_auc", None),
+        # Final model group
+        "final_model": {
+            "params": clean_results.get("model_params", {}),
+            "n_estimators": clean_results.get("n_estimators", None),
+            "model_file_path": f"models/{project_id}.json",
+            "feature_names": clean_results.get("feature_names", []),
+        },
+        # Evaluation group
+        "evaluation": {
+            "metrics": {
+                "cv": {
+                    "auc_mean": clean_results.get("cv_auc", None),
+                    "auc_std": clean_results.get("cv_auc_std", None),
+                },
+                "test": {
+                    "auc": clean_results.get("test_auc", None),
+                    "accuracy": clean_results.get("test_accuracy", None),
+                    "precision": clean_results.get("test_precision", None),
+                    "recall": clean_results.get("test_recall", None),
+                    "f1": clean_results.get("test_f1", None),
+                    "confusion_matrix": clean_results.get("confusion_matrix", None),
+                },
+            },
+            "feature_importance": clean_results.get("feature_importance", {}),
+            "lift_chart": {
+                "bins": 10,
+                "data": clean_results.get("lift_chart_data", []),
+            },
+        },
+    }
+
+    result = db[PROJECTS_COLLECTION].update_one(
+        {"_id": ObjectId(project_id)}, {"$set": update_doc}
     )
     return result.modified_count > 0
 
@@ -188,29 +269,85 @@ def add_project_metadata(project_id: str, key: str, value: Any) -> bool:
     return result.modified_count > 0
 
 
-def cleanup_failed_project(project_id: str, error_message: str) -> bool:
+def cleanup_failed_project(
+    project_id: str, error_message: str, stage: str = "unknown"
+) -> bool:
     """Mark a project as failed and log the error"""
     from logging_config import get_logger
+    import traceback
 
     logger = get_logger(__name__)
     db = mongo_conn.get_database()
 
-    # Update project status
+    # Update project status with new error structure
     db[PROJECTS_COLLECTION].update_one(
         {"_id": ObjectId(project_id)},
         {
             "$set": {
                 "status": "failed",
                 "updated_at": datetime.utcnow(),
-                "error": error_message,
+                "error": {
+                    "message": error_message,
+                    "traceback": traceback.format_exc(),
+                    "failed_at": datetime.utcnow(),
+                    "stage": stage,
+                },
             }
         },
     )
 
     # Log the error using the new logging system
-    logger.error(f"Training failed: {error_message}", extra={"project_id": project_id})
+    logger.error(
+        f"Training failed at {stage}: {error_message}", extra={"project_id": project_id}
+    )
 
     return True
+
+
+def update_project_dataset_info(project_id: str, dataset_info: Dict[str, Any]) -> bool:
+    """Update dataset information after initial analysis"""
+    db = mongo_conn.get_database()
+
+    update_fields = {}
+    for key, value in dataset_info.items():
+        update_fields[f"dataset.{key}"] = value
+    update_fields["updated_at"] = datetime.utcnow()
+
+    result = db[PROJECTS_COLLECTION].update_one(
+        {"_id": ObjectId(project_id)}, {"$set": update_fields}
+    )
+    return result.modified_count > 0
+
+
+def update_project_preprocessing(
+    project_id: str, preprocessing_info: Dict[str, Any]
+) -> bool:
+    """Update preprocessing information"""
+    db = mongo_conn.get_database()
+
+    result = db[PROJECTS_COLLECTION].update_one(
+        {"_id": ObjectId(project_id)},
+        {
+            "$set": {
+                "preprocessing": preprocessing_info,
+                "updated_at": datetime.utcnow(),
+            }
+        },
+    )
+    return result.modified_count > 0
+
+
+def update_project_tuning_results(
+    project_id: str, tuning_results: Dict[str, Any]
+) -> bool:
+    """Update hyperparameter tuning results"""
+    db = mongo_conn.get_database()
+
+    result = db[PROJECTS_COLLECTION].update_one(
+        {"_id": ObjectId(project_id)},
+        {"$set": {"tuning": tuning_results, "updated_at": datetime.utcnow()}},
+    )
+    return result.modified_count > 0
 
 
 def delete_project(project_id: str) -> bool:

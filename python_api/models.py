@@ -58,4 +58,5 @@ class TrainingResult(BaseModel):
     model: xgb.Booster
     best_params: Dict[str, Any]
     cv_auc: float
+    cv_auc_std: float
     best_n_estimators: int

@@ -134,19 +134,37 @@ async def list_projects():
     for project in projects:
         formatted_project = {
             "id": project["_id"],
-            "name": project["name"],
+            "name": project.get(
+                "project_name", project.get("name", "Unnamed")
+            ),  # Handle both schemas
             "created_at": project["created_at"].isoformat()
             if isinstance(project["created_at"], datetime)
             else project["created_at"],
             "csv_filename": project["dataset"]["filename"],
             "target_column": project["dataset"]["target_column"],
             "feature_columns": project["dataset"]["feature_columns"],
-            "model_params": project["config"],
+            "model_params": project.get(
+                "model_config", project.get("config", {})
+            ),  # Handle both schemas
             "status": project["status"],
         }
 
-        # Add results if available
-        if "results" in project:
+        # Add results if available (handle both old and new schema)
+        if "evaluation" in project:
+            # New schema
+            formatted_project.update(
+                {
+                    "auc_score": project["evaluation"]["metrics"]["test"].get("auc"),
+                    "accuracy": 0,  # Not used anymore
+                    "feature_importance": project["evaluation"].get(
+                        "feature_importance"
+                    ),
+                    "confusion_matrix": [],  # Not used anymore
+                    "lift_chart_data": project["evaluation"]["lift_chart"].get("data"),
+                }
+            )
+        elif "results" in project:
+            # Old schema
             formatted_project.update(
                 {
                     "auc_score": project["results"].get("test_auc"),
@@ -183,19 +201,35 @@ async def get_project_details(project_id: str):
     # Format response
     formatted_project = {
         "id": project["_id"],
-        "name": project["name"],
+        "name": project.get(
+            "project_name", project.get("name", "Unnamed")
+        ),  # Handle both schemas
         "created_at": project["created_at"].isoformat()
         if isinstance(project["created_at"], datetime)
         else project["created_at"],
         "csv_filename": project["dataset"]["filename"],
         "target_column": project["dataset"]["target_column"],
         "feature_columns": project["dataset"]["feature_columns"],
-        "model_params": project["config"],
+        "model_params": project.get(
+            "model_config", project.get("config", {})
+        ),  # Handle both schemas
         "status": project["status"],
     }
 
-    # Add results if available
-    if "results" in project:
+    # Add results if available (handle both old and new schema)
+    if "evaluation" in project:
+        # New schema
+        formatted_project.update(
+            {
+                "auc_score": project["evaluation"]["metrics"]["test"].get("auc"),
+                "accuracy": 0,  # Not used anymore
+                "feature_importance": project["evaluation"].get("feature_importance"),
+                "confusion_matrix": [],  # Not used anymore
+                "lift_chart_data": project["evaluation"]["lift_chart"].get("data"),
+            }
+        )
+    elif "results" in project:
+        # Old schema
         formatted_project.update(
             {
                 "auc_score": project["results"].get("test_auc"),
@@ -392,16 +426,25 @@ async def generate_project_code(project_id: str):
                 detail="Code generation is only available for completed models",
             )
 
-        # Extract necessary information
+        # Extract necessary information from new schema
         dataset = project["dataset"]
-        config = project["config"]
-        results = project.get("results", {})
+        config = project.get("model_config", {})
 
-        # Get preprocessing artifacts
-        preprocessing_artifacts = results.get("preprocessing_artifacts", {})
+        # Get preprocessing artifacts from new location
+        preprocessing = project.get("preprocessing", {})
+        preprocessing_artifacts = {
+            "numeric_columns": dataset.get("column_types", {}).get("numeric", []),
+            "categorical_columns": dataset.get("column_types", {}).get(
+                "categorical", []
+            ),
+            "datetime_columns": dataset.get("column_types", {}).get("datetime", []),
+            "encoders": preprocessing.get("feature_mappings", {}),
+            "pipeline_code": preprocessing.get("pipeline_code", ""),
+        }
 
-        # Get model parameters
-        model_params = results.get("model_params", {})
+        # Get model parameters from final_model
+        final_model = project.get("final_model", {})
+        model_params = final_model.get("params", {})
         if "objective" in model_params:
             del model_params["objective"]  # Will be set separately
         if "eval_metric" in model_params:
@@ -419,14 +462,14 @@ async def generate_project_code(project_id: str):
             test_size=config.get("test_size", 0.2),
             model_params=model_params,
             preprocessing_artifacts=preprocessing_artifacts,
-            n_estimators=results.get("n_estimators", 100),
+            n_estimators=final_model.get("n_estimators", 100),
             objective=config.get("objective", "binary:logistic"),
             eval_metric=config.get("eval_metric", "auc"),
         )
 
         return {
             "project_id": project_id,
-            "project_name": project["name"],
+            "project_name": project.get("project_name", project.get("name", "Unnamed")),
             "code": code,
             "filename": f"{project['name'].replace(' ', '_').lower()}_training.py",
         }

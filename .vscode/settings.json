@@ -1,5 +1,5 @@
 {
-  "python.analysis.extraPaths": [".", "python_api"],
-  "python.analysis.include": ["python_api/**/*"],
-  "python.defaultInterpreterPath": "./.venv/bin/python"
+    "python.analysis.extraPaths": ["./.venv/lib/python3.12/site-packages",".", "python_api"],
+    "python.defaultInterpreterPath": "./.venv/bin/python",
+  "python.analysis.include": ["python_api/**/*,","./.venv/lib/python3.12/site-packages/**"]
 }

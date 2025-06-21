@@ -13,6 +13,9 @@ from mongo_utils import (
     update_project_results,
     cleanup_failed_project,
     update_project_status,
+    update_project_dataset_info,
+    update_project_preprocessing,
+    update_project_tuning_results,
 )
 from logging_config import get_logger
 from xgb_params import DEFAULT_PARAM_GRID
@@ -22,6 +25,7 @@ from modeling_utils import (
     fit_xgb_model,
     extract_feature_importance,
     compute_lift_chart_data,
+    calculate_test_metrics,
     write_model_file,
     build_results_dict,
     execute_hyperparameter_search,
@@ -78,6 +82,35 @@ def prepare_training_data(
     dtrain = xgb.DMatrix(X_train, label=y_train)
     dtest = xgb.DMatrix(X_test, label=y_test)
 
+    # Update dataset info in MongoDB
+    dataset_updates = {
+        "row_count": len(df),
+        "column_count": len(df.columns),
+        "column_types": {
+            "numeric": preprocessing_artifacts.get("numeric_columns", []),
+            "categorical": preprocessing_artifacts.get("categorical_columns", []),
+            "datetime": preprocessing_artifacts.get("datetime_columns", []),
+        },
+        "missing_values": {
+            col: int(df[col].isna().sum())
+            for col in df.columns
+            if df[col].isna().sum() > 0
+        },
+    }
+    update_project_dataset_info(project_id, dataset_updates)
+
+    # Update preprocessing info in MongoDB
+    preprocessing_info = {
+        "pipeline_definition": preprocessing_artifacts.get("pipeline_definition", {}),
+        "feature_mappings": {
+            k: v
+            for k, v in preprocessing_artifacts.get("encoders", {}).items()
+            if k not in ["categorical", "_target"]
+        },
+        "pipeline_code": preprocessing_artifacts.get("pipeline_code", ""),
+    }
+    update_project_preprocessing(project_id, preprocessing_info)
+
     # Prepare dataset info for later use
     dataset_info = {
         "total_rows": len(df),
@@ -129,7 +162,7 @@ def train_and_tune_xgboost_model(
         logger.info("Using default parameter grid", extra={"project_id": project_id})
 
     # Tune hyperparameters
-    best_params, cv_auc, best_n_estimators = execute_hyperparameter_search(
+    best_params, cv_auc, best_n_estimators, cv_auc_std = execute_hyperparameter_search(
         dtrain,
         request.objective,
         param_grid,
@@ -137,6 +170,16 @@ def train_and_tune_xgboost_model(
         request.early_stopping_rounds,
         project_id,
     )
+
+    # Update tuning results in MongoDB
+    tuning_results = {
+        "search_method": "grid_search",
+        "param_grid": param_grid,
+        "best_params": best_params,
+        "best_score": cv_auc,
+        "best_n_estimators": best_n_estimators,
+    }
+    update_project_tuning_results(project_id, tuning_results)
 
     # Train final model with best parameters
     update_project_status(project_id, "Finalizing model and calculating metrics")
@@ -156,6 +199,7 @@ def train_and_tune_xgboost_model(
         model=model,
         best_params=best_params,
         cv_auc=cv_auc,
+        cv_auc_std=cv_auc_std,
         best_n_estimators=best_n_estimators,
     )
 
@@ -180,6 +224,9 @@ def process_and_save_results(
     lift_data = compute_lift_chart_data(
         data_prep_result.y_test.to_numpy(), y_pred_proba
     )
+    test_metrics = calculate_test_metrics(
+        data_prep_result.y_test.to_numpy(), y_pred_proba
+    )
 
     # Save model
     _ = write_model_file(training_result.model, project_id)
@@ -194,6 +241,9 @@ def process_and_save_results(
         final_params,
         training_result.best_n_estimators,
         data_prep_result.preprocessing_artifacts,
+        test_metrics,
+        request.feature_columns,  # Pass feature names
+        training_result.cv_auc_std,  # Pass CV std
     )
 
     # Update project in database

@@ -70,7 +70,9 @@ def _create_transformers(
                 (
                     "encoder",
                     OrdinalEncoder(
-                        handle_unknown="use_encoded_value", unknown_value=-1
+                        handle_unknown="use_encoded_value",
+                        unknown_value=-1,
+                        max_categories=1000,  # type: ignore
                     ),
                 ),
             ]
@@ -271,7 +273,68 @@ def get_preprocessing_artifacts(
         "datetime_columns": column_info.get("datetime_columns", []),
         "encoders": {},
         "imputers": {},
+        "pipeline_code": column_info.get("pipeline_code", ""),
     }
+
+    # Build pipeline definition for new schema
+    pipeline_definition = {
+        "steps": [
+            {
+                "name": "datetime_converter",
+                "type": "custom",
+                "class": "DatetimeToString",
+            },
+            {
+                "name": "column_transformer",
+                "type": "sklearn.compose.ColumnTransformer",
+                "transformers": [],
+            },
+        ]
+    }
+
+    # Add numeric transformer if needed
+    if column_info["numeric_columns"]:
+        pipeline_definition["steps"][1]["transformers"].append(
+            {
+                "name": "numeric",
+                "transformer": "Pipeline",
+                "columns": column_info["numeric_columns"],
+                "steps": [
+                    {
+                        "name": "imputer",
+                        "type": "SimpleImputer",
+                        "params": {"strategy": "constant", "fill_value": -9999},
+                    }
+                ],
+            }
+        )
+
+    # Add categorical transformer if needed
+    if column_info["categorical_columns"]:
+        pipeline_definition["steps"][1]["transformers"].append(
+            {
+                "name": "categorical",
+                "transformer": "Pipeline",
+                "columns": column_info["categorical_columns"],
+                "steps": [
+                    {
+                        "name": "imputer",
+                        "type": "SimpleImputer",
+                        "params": {"strategy": "constant", "fill_value": "missing"},
+                    },
+                    {
+                        "name": "encoder",
+                        "type": "OrdinalEncoder",
+                        "params": {
+                            "handle_unknown": "use_encoded_value",
+                            "unknown_value": -1,
+                        },
+                    },
+                ],
+            }
+        )
+
+    artifacts["pipeline_definition"] = pipeline_definition
 
     # Extract encoder artifacts if pipeline exists
     if pipeline and column_info["categorical_columns"]:
