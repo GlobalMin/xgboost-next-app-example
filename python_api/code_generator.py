@@ -27,33 +27,59 @@ import pandas as pd
 import numpy as np
 import xgboost as xgb
 from sklearn.preprocessing import OrdinalEncoder, LabelEncoder
+from sklearn.impute import SimpleImputer
 
 # Load data
 df = pd.read_csv("{csv_filename}")
-X = df[{numeric_columns} + {categorical_columns}]
-y = df["{target_column}"]
 
-# Preprocessing
-X[{numeric_columns}] = X[{numeric_columns}].fillna(-9999)
-if {categorical_columns}:
+# Define feature columns
+numeric_features = {numeric_columns}
+categorical_features = {categorical_columns}
+target_column = "{target_column}"
+
+# Extract features and target
+feature_columns = numeric_features + categorical_features
+X = df[feature_columns]
+y = df[target_column]
+
+# Preprocessing pipeline
+# Handle numeric features
+if numeric_features:
+    numeric_imputer = SimpleImputer(strategy="constant", fill_value=-9999)
+    X[numeric_features] = numeric_imputer.fit_transform(X[numeric_features])
+
+# Handle categorical features
+if categorical_features:
+    categorical_imputer = SimpleImputer(strategy="constant", fill_value="missing")
+    X[categorical_features] = categorical_imputer.fit_transform(X[categorical_features])
+    
+    # Encode categorical variables
     encoder = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)
-    X[{categorical_columns}] = encoder.fit_transform(X[{categorical_columns}]).fillna(-9999)
+    X[categorical_features] = encoder.fit_transform(X[categorical_features])
+
+# Ensure all features are float32
 X = X.astype(np.float32)
 
+# Encode target if categorical
 if y.dtype == "object":
-    y = LabelEncoder().fit_transform(y)
+    label_encoder = LabelEncoder()
+    y = label_encoder.fit_transform(y)
 
-# Train
+# Model parameters
 params = {json.dumps(model_params, indent=4)}
-# Only override the objective - let XGBoost use its defaults for everything else
 params["objective"] = "{objective}"
 
+# Train model
+dtrain = xgb.DMatrix(X, label=y)
 model = xgb.train(
-    params,
-    xgb.DMatrix(X, label=y),
+    params=params,
+    dtrain=dtrain,
     num_boost_round={n_estimators}
 )
+
+# Save model
 model.save_model("xgboost_model.json")
+print("Model training completed and saved to xgboost_model.json")
 ''')
 
     return code.strip()

@@ -73,8 +73,9 @@ def process_raw_features(
     if numeric_columns:
         # For tree-based models, use a special value for missing data
         # This allows the trees to learn patterns from missingness
-        X[numeric_columns] = X[numeric_columns].fillna(-9999)
-        preprocessing_artifacts["imputers"]["numeric"] = "constant_-9999"
+        numeric_imputer = SimpleImputer(strategy="constant", fill_value=-9999)
+        X[numeric_columns] = numeric_imputer.fit_transform(X[numeric_columns])
+        preprocessing_artifacts["imputers"]["numeric"] = numeric_imputer
 
     # Handle missing values for categorical features using constant imputation
     if categorical_columns:

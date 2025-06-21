@@ -467,11 +467,12 @@ async def generate_project_code(project_id: str):
             eval_metric=config.get("eval_metric", "auc"),
         )
 
+        project_name = project.get("project_name", project.get("name", "Unnamed"))
         return {
             "project_id": project_id,
-            "project_name": project.get("project_name", project.get("name", "Unnamed")),
+            "project_name": project_name,
             "code": code,
-            "filename": f"{project['name'].replace(' ', '_').lower()}_training.py",
+            "filename": f"{project_name.replace(' ', '_').lower()}_training.py",
         }
 
     except HTTPException:
