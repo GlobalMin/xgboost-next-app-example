@@ -53,7 +53,6 @@ def valid_train_request():
         "feature_columns": ["feature1", "feature2"],
         "test_size": 0.2,
         "cv_folds": 3,
-        "tune_parameters": True,
         "early_stopping_rounds": 50,
         "objective": "binary:logistic",
     }

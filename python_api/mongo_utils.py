@@ -68,7 +68,6 @@ def create_project(project_data: Dict[str, Any]) -> str:
         "config": {
             "test_size": project_data.get("test_size", 0.2),
             "cv_folds": project_data.get("cv_folds", 5),
-            "tune_parameters": project_data.get("tune_parameters", False),
             "early_stopping_rounds": project_data.get("early_stopping_rounds", 50),
             "objective": project_data.get("objective", "binary:logistic"),
         },

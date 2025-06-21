@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from typing import List
 
 
-from xgb_modeling import train_xgboost_model
+from xgb_modeling import run_xgboost_training_flow
 from models import TrainRequest
 from config import UPLOAD_DIR
 from mongo_utils import create_project, get_project, get_projects, get_training_logs
@@ -70,7 +70,7 @@ async def upload_csv(file: UploadFile = File(...)):
 def run_training_task(project_id: str, request: TrainRequest):
     """Run training as a background task"""
     try:
-        train_xgboost_model(project_id, request)
+        run_xgboost_training_flow(project_id, request)
     except Exception as e:
         print(f"Training failed for project {project_id}: {str(e)}")
         # Update status to failed
@@ -100,7 +100,6 @@ async def train_project(request: TrainRequest, background_tasks: BackgroundTasks
         "feature_columns": request.feature_columns,
         "test_size": request.test_size,
         "cv_folds": request.cv_folds,
-        "tune_parameters": request.tune_parameters,
         "early_stopping_rounds": request.early_stopping_rounds,
         "objective": request.objective,
         "custom_param_grid": request.custom_param_grid,

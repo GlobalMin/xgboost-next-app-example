@@ -22,7 +22,6 @@ class TestTrainRequest:
         assert request.feature_columns == ["feature1", "feature2"]
         assert request.test_size == 0.2
         assert request.cv_folds == 3
-        assert request.tune_parameters is True
         assert request.early_stopping_rounds == 50
         assert request.objective == "binary:logistic"
         assert request.custom_param_grid is None
@@ -54,7 +53,6 @@ class TestTrainRequest:
         # Check defaults
         assert request.test_size == 0.2
         assert request.cv_folds == 3
-        assert request.tune_parameters is True
         assert request.early_stopping_rounds == 50
         assert request.objective == "binary:logistic"
         assert request.custom_param_grid is None

@@ -18,8 +18,8 @@ from logging_config import get_logger
 logger = get_logger(__name__)
 
 
-def load_dataset(filename: str) -> pd.DataFrame:
-    """Load dataset from uploaded CSV file"""
+def read_csv_file(filename: str) -> pd.DataFrame:
+    """Atomic: Load dataset from uploaded CSV file"""
     file_path = os.path.join(UPLOAD_DIR, filename)
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Dataset file not found: {filename}")
@@ -27,10 +27,10 @@ def load_dataset(filename: str) -> pd.DataFrame:
     return pd.read_csv(file_path)
 
 
-def preprocess_data(
+def process_raw_features(
     df: pd.DataFrame, feature_columns: List[str], target_column: str
 ) -> Tuple[pd.DataFrame, pd.Series, Dict[str, Any]]:
-    """Preprocess data for XGBoost training with improved handling of categorical and missing values
+    """Multi-step: Preprocess data for XGBoost training with improved handling of categorical and missing values
 
     Returns:
         Tuple of (X_processed, y_processed, preprocessing_artifacts)
@@ -106,32 +106,32 @@ def preprocess_data(
     return X, y, preprocessing_artifacts
 
 
-def create_train_test_split(
+def split_train_test(
     X: pd.DataFrame, y: pd.Series, test_size: float = 0.2, random_state: int = 42
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
-    """Create stratified train-test split"""
+    """Atomic: Create stratified train-test split"""
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=test_size, random_state=random_state, stratify=y
     )
     return X_train, X_test, y_train, y_test
 
 
-def generate_parameter_grid(base_grid: Dict[str, List]) -> List[Dict[str, Any]]:
-    """Generate parameter combinations from grid using itertools"""
+def build_param_grid(base_grid: Dict[str, List]) -> List[Dict[str, Any]]:
+    """Atomic: Generate parameter combinations from grid using itertools"""
     param_names = list(base_grid.keys())
     param_values = [base_grid[name] for name in param_names]
 
     return [dict(zip(param_names, values)) for values in product(*param_values)]
 
 
-def train_single_model(
+def fit_xgb_model(
     dtrain: xgb.DMatrix,
     params: Dict[str, Any],
     num_rounds: int,
     evals: Optional[List] = None,
     early_stopping_rounds: Optional[int] = None,
 ) -> xgb.Booster:
-    """Train a single XGBoost model"""
+    """Atomic: Train a single XGBoost model"""
     return xgb.train(
         params=params,
         dtrain=dtrain,
@@ -142,14 +142,14 @@ def train_single_model(
     )
 
 
-def cross_validate_params(
+def run_cross_validation(
     dtrain: xgb.DMatrix,
     params: Dict[str, Any],
     cv_folds: int,
     num_rounds: int,
     early_stopping_rounds: int,
 ) -> Tuple[float, float, int]:
-    """Run cross-validation for a parameter set
+    """Multi-step: Run cross-validation for a parameter set
 
     Returns:
         Tuple of (mean_score, std_score, optimal_rounds)
@@ -177,10 +177,10 @@ def cross_validate_params(
     return mean_score, std_score, optimal_rounds
 
 
-def calculate_feature_importance(
+def extract_feature_importance(
     model: xgb.Booster, feature_names: List[str]
 ) -> Dict[str, float]:
-    """Extract feature importance from trained model"""
+    """Multi-step: Extract feature importance from trained model"""
     # Try different importance types to get meaningful values
     importance_dict = model.get_score(
         importance_type="gain"
@@ -214,10 +214,10 @@ def calculate_feature_importance(
     return feature_importance
 
 
-def calculate_lift_chart(
+def compute_lift_chart_data(
     y_true: np.ndarray, y_pred_proba: np.ndarray, n_bins: int = 10
 ) -> List[Dict[str, Any]]:
-    """Calculate lift chart data for model evaluation"""
+    """Multi-step: Calculate lift chart data for model evaluation"""
     df = pd.DataFrame({"y_true": y_true, "y_pred_proba": y_pred_proba})
 
     # Sort by predicted probability and create bins
@@ -241,14 +241,14 @@ def calculate_lift_chart(
     return lift_data
 
 
-def save_model(model: xgb.Booster, project_id: str) -> str:
-    """Save XGBoost model to file"""
+def write_model_file(model: xgb.Booster, project_id: str) -> str:
+    """Atomic: Save XGBoost model to file"""
     model_path = os.path.join(MODEL_DIR, f"{project_id}.json")
     model.save_model(model_path)
     return model_path
 
 
-def prepare_results(
+def build_results_dict(
     test_auc: float,
     cv_auc: float,
     feature_importance: Dict[str, float],
@@ -257,7 +257,7 @@ def prepare_results(
     n_estimators: int,
     preprocessing_artifacts: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Prepare final results dictionary"""
+    """Atomic: Prepare final results dictionary"""
     results = {
         "test_auc": float(test_auc),
         "cv_auc": float(cv_auc),
@@ -273,7 +273,7 @@ def prepare_results(
     return results
 
 
-def tune_hyperparameters(
+def execute_hyperparameter_search(
     dtrain: xgb.DMatrix,
     base_params: Dict[str, Any],
     param_grid: Dict[str, List],
@@ -281,12 +281,12 @@ def tune_hyperparameters(
     early_stopping_rounds: int,
     project_id: str,
 ) -> Tuple[Dict[str, Any], float, int]:
-    """Tune hyperparameters using grid search
+    """Multi-step: Tune hyperparameters using grid search
 
     Returns:
         Tuple of (best_params, best_score, best_n_estimators)
     """
-    param_combinations = generate_parameter_grid(param_grid)
+    param_combinations = build_param_grid(param_grid)
     logger.info(
         f"Testing {len(param_combinations)} parameter combinations",
         extra={"project_id": project_id},
@@ -299,7 +299,7 @@ def tune_hyperparameters(
     for idx, params in enumerate(param_combinations):
         cv_params = {**base_params, **params}
 
-        mean_score, _, optimal_rounds = cross_validate_params(
+        mean_score, _, optimal_rounds = run_cross_validation(
             dtrain, cv_params, cv_folds, 500, early_stopping_rounds
         )
 
