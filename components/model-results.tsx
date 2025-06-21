@@ -18,12 +18,29 @@ interface ModelResultsProps {
     created_at: string;
     auc_score: number;
     cv_auc_score?: number;
+    cv_auc_std?: number;
     test_auc_score?: number;
     feature_importance: Record<string, number>;
     best_params?: Record<string, any>;
     n_estimators_used?: number;
     lift_chart_data?: any[];
+    lift_chart_data_multi?: {
+      all?: any[];
+      cv?: any[];
+      test?: any[];
+    };
     status: string;
+    train_size?: number;
+    test_size?: number;
+    dataset_stats?: {
+      total_rows?: number;
+      target_rate?: number;
+      total_columns?: number;
+      n_features_used?: number;
+    };
+    csv_filename?: string;
+    target_column?: string;
+    feature_columns?: string[];
   };
 }
 
@@ -33,6 +50,9 @@ export function ModelResults({ model }: ModelResultsProps) {
   );
   const [showLogs, setShowLogs] = useState(false);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [liftChartSource, setLiftChartSource] = useState<"all" | "cv" | "test">(
+    "all",
+  );
 
   useEffect(() => {
     if (showLogs && logs.length === 0) {
@@ -110,7 +130,154 @@ export function ModelResults({ model }: ModelResultsProps) {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="mb-6 space-y-4">
+          {/* Combined Dataset & Model Info */}
+          <div className="p-4 bg-gray-50 rounded-lg">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">
+              Dataset & Model Configuration
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-2 text-sm">
+              {/* Dataset Info */}
+              <div className="flex items-center">
+                <span className="text-gray-600">File:</span>
+                <span className="ml-1 font-semibold">
+                  {model.csv_filename || "Unknown"}
+                </span>
+              </div>
+              <div className="flex items-center">
+                <span className="text-gray-600">Total Rows:</span>
+                <span className="ml-1 font-semibold">
+                  {model.dataset_stats?.total_rows?.toLocaleString() || "N/A"}
+                </span>
+              </div>
+              <div className="flex items-center">
+                <span className="text-gray-600">Target Column:</span>
+                <span className="ml-1 font-semibold">
+                  {model.target_column || "Unknown"}
+                </span>
+              </div>
+              <div className="flex items-center">
+                <span className="text-gray-600">Target Rate:</span>
+                <span className="ml-1 font-semibold">
+                  {model.dataset_stats?.target_rate !== undefined
+                    ? `${(model.dataset_stats.target_rate * 100).toFixed(1)}%`
+                    : "N/A"}
+                </span>
+              </div>
+              {/* Model Config */}
+              <div className="flex items-center">
+                <span className="text-gray-600">Features Used:</span>
+                <span className="ml-1 font-semibold">
+                  {model.dataset_stats?.n_features_used ||
+                    model.feature_columns?.length ||
+                    "N/A"}
+                </span>
+              </div>
+              <div className="flex items-center">
+                <span className="text-gray-600">Trees:</span>
+                <span className="ml-1 font-semibold">
+                  {model.n_estimators_used || "N/A"}
+                </span>
+              </div>
+              <div className="flex items-center">
+                <span className="text-gray-600">Max Depth:</span>
+                <span className="ml-1 font-semibold">
+                  {model.best_params?.max_depth || "N/A"}
+                </span>
+              </div>
+              <div className="flex items-center">
+                <span className="text-gray-600">Learning Rate:</span>
+                <span className="ml-1 font-semibold">
+                  {model.best_params?.learning_rate || "N/A"}
+                </span>
+              </div>
+              <div className="flex items-center">
+                <span className="text-gray-600">Lambda:</span>
+                <span className="ml-1 font-semibold">
+                  {model.best_params?.lambda || "N/A"}
+                </span>
+              </div>
+              <div className="flex items-center">
+                <span className="text-gray-600">Subsample:</span>
+                <span className="ml-1 font-semibold">
+                  {model.best_params?.subsample || "N/A"}
+                </span>
+              </div>
+              <div className="flex items-center">
+                <span className="text-gray-600">Col Sample:</span>
+                <span className="ml-1 font-semibold">
+                  {model.best_params?.colsample_bytree || "N/A"}
+                </span>
+              </div>
+              <div className="flex items-center">
+                <span className="text-gray-600">Early Stop:</span>
+                <span className="ml-1 font-semibold">
+                  {model.n_estimators_used
+                    ? `${model.n_estimators_used} trees`
+                    : "N/A"}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Performance Metrics */}
+          <div className="p-4 bg-green-50 rounded-lg">
+            <h3 className="text-sm font-semibold text-green-900 mb-3">
+              Performance Summary
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <span className="text-green-700">CV AUC Std:</span>
+                <span className="ml-2 font-semibold text-green-900">
+                  {model.cv_auc_std !== undefined
+                    ? `±${(model.cv_auc_std * 100).toFixed(1)}%`
+                    : "N/A"}
+                </span>
+              </div>
+              <div>
+                <span className="text-green-700">Test/CV Diff:</span>
+                <span className="ml-2 font-semibold text-green-900">
+                  {model.cv_auc_score &&
+                  (model.test_auc_score || model.auc_score)
+                    ? `${(((model.test_auc_score || model.auc_score) - model.cv_auc_score) * 100).toFixed(2)}%`
+                    : "N/A"}
+                </span>
+              </div>
+              <div>
+                <span className="text-green-700">Train Size:</span>
+                <span className="ml-2 font-semibold text-green-900">
+                  {model.train_size?.toLocaleString() || "N/A"}
+                </span>
+              </div>
+              <div>
+                <span className="text-green-700">Test Size:</span>
+                <span className="ml-2 font-semibold text-green-900">
+                  {model.test_size?.toLocaleString() || "N/A"}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-green-50 rounded-lg p-4">
+            <div className="flex items-center space-x-2 mb-2">
+              <TrendingUp className="h-5 w-5 text-green-600" />
+              <h3 className="text-lg font-medium text-green-900">CV AUC</h3>
+            </div>
+            <p className="text-3xl font-bold text-green-600">
+              {model.cv_auc_score
+                ? (model.cv_auc_score * 100).toFixed(2)
+                : "--"}
+              %
+            </p>
+            <p className="text-sm text-green-700 mt-1">
+              Cross-validation average
+              {model.train_size &&
+                ` (${model.train_size.toLocaleString()} rows)`}
+            </p>
+          </div>
+
           <div className="bg-blue-50 rounded-lg p-4">
             <div className="flex items-center space-x-2 mb-2">
               <TrendingUp className="h-5 w-5 text-blue-600" />
@@ -121,42 +288,77 @@ export function ModelResults({ model }: ModelResultsProps) {
             </p>
             <p className="text-sm text-blue-700 mt-1">
               Out-of-sample performance
+              {model.test_size && ` (${model.test_size.toLocaleString()} rows)`}
             </p>
           </div>
-
-          {model.cv_auc_score !== undefined && (
-            <div className="bg-green-50 rounded-lg p-4">
-              <div className="flex items-center space-x-2 mb-2">
-                <TrendingUp className="h-5 w-5 text-green-600" />
-                <h3 className="text-lg font-medium text-green-900">CV AUC</h3>
-              </div>
-              <p className="text-3xl font-bold text-green-600">
-                {(model.cv_auc_score * 100).toFixed(2)}%
-              </p>
-              <p className="text-sm text-green-700 mt-1">
-                Cross-validation average
-              </p>
-            </div>
-          )}
-
-          {model.n_estimators_used !== undefined && (
-            <div className="bg-purple-50 rounded-lg p-4">
-              <h3 className="text-lg font-medium text-purple-900 mb-2">
-                Trees Used
-              </h3>
-              <p className="text-3xl font-bold text-purple-600">
-                {model.n_estimators_used}
-              </p>
-              <p className="text-sm text-purple-700 mt-1">
-                Stopped at iteration {model.n_estimators_used}
-              </p>
-            </div>
-          )}
         </div>
       </div>
 
-      {model.lift_chart_data && model.lift_chart_data.length > 0 && (
-        <LiftChart data={model.lift_chart_data} />
+      {(model.lift_chart_data_multi || model.lift_chart_data) && (
+        <div className="bg-white rounded-lg shadow p-6 w-full">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-2">
+              <TrendingUp className="h-5 w-5 text-blue-600" />
+              <h3 className="text-lg font-semibold">Model Lift Chart</h3>
+            </div>
+            {model.lift_chart_data_multi && (
+              <div className="flex items-center space-x-2">
+                <label className="text-sm text-gray-600">Data Source:</label>
+                <select
+                  value={liftChartSource}
+                  onChange={(e) =>
+                    setLiftChartSource(e.target.value as "all" | "cv" | "test")
+                  }
+                  className="text-sm border border-gray-300 rounded px-3 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">All Data (CV + Test)</option>
+                  <option value="cv">CV Data Only</option>
+                  <option value="test">Test Data Only</option>
+                </select>
+              </div>
+            )}
+          </div>
+
+          {(() => {
+            let chartData = model.lift_chart_data || [];
+
+            if (model.lift_chart_data_multi) {
+              if (
+                liftChartSource === "all" &&
+                model.lift_chart_data_multi.all
+              ) {
+                chartData = model.lift_chart_data_multi.all;
+              } else if (
+                liftChartSource === "cv" &&
+                model.lift_chart_data_multi.cv
+              ) {
+                chartData = model.lift_chart_data_multi.cv;
+              } else if (
+                liftChartSource === "test" &&
+                model.lift_chart_data_multi.test
+              ) {
+                chartData = model.lift_chart_data_multi.test;
+              }
+            }
+
+            const sourceLabel =
+              liftChartSource === "all"
+                ? "Combined CV + Test Data"
+                : liftChartSource === "cv"
+                  ? "Cross-Validation Data Only"
+                  : "Test Data Only";
+
+            return (
+              <div>
+                <p className="text-sm text-gray-500 mb-2">
+                  Currently showing:{" "}
+                  <span className="font-semibold">{sourceLabel}</span>
+                </p>
+                <LiftChart key={liftChartSource} data={chartData} />
+              </div>
+            );
+          })()}
+        </div>
       )}
 
       <div className="bg-white rounded-lg shadow p-6">
@@ -204,26 +406,6 @@ export function ModelResults({ model }: ModelResultsProps) {
           </p>
         )}
       </div>
-
-      {model.best_params && (
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold mb-4">Best Parameters</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {Object.entries(model.best_params).map(([param, value]) => (
-              <div key={param} className="bg-gray-50 rounded p-3">
-                <p className="text-sm font-medium text-gray-600">
-                  {param
-                    .replace(/_/g, " ")
-                    .replace(/\b\w/g, (l) => l.toUpperCase())}
-                </p>
-                <p className="text-lg font-semibold text-gray-900">
-                  {typeof value === "number" ? value.toFixed(3) : value}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       <div className="bg-white rounded-lg shadow p-6">
         <div

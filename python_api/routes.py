@@ -210,6 +210,7 @@ async def get_project_details(project_id: str):
         "csv_filename": project["dataset"]["filename"],
         "target_column": project["dataset"]["target_column"],
         "feature_columns": project["dataset"]["feature_columns"],
+        "total_rows": project["dataset"].get("row_count"),
         "model_params": project.get(
             "model_config", project.get("config", {})
         ),  # Handle both schemas
@@ -222,10 +223,21 @@ async def get_project_details(project_id: str):
         formatted_project.update(
             {
                 "auc_score": project["evaluation"]["metrics"]["test"].get("auc"),
+                "test_auc_score": project["evaluation"]["metrics"]["test"].get("auc"),
+                "cv_auc_score": project["evaluation"]["metrics"]["cv"].get("auc_mean"),
+                "cv_auc_std": project["evaluation"]["metrics"]["cv"].get("auc_std"),
                 "accuracy": 0,  # Not used anymore
                 "feature_importance": project["evaluation"].get("feature_importance"),
                 "confusion_matrix": [],  # Not used anymore
                 "lift_chart_data": project["evaluation"]["lift_chart"].get("data"),
+                "lift_chart_data_multi": project["evaluation"]["lift_chart"].get(
+                    "data_multi"
+                ),
+                "train_size": project["evaluation"].get("train_size"),
+                "test_size": project["evaluation"].get("test_size"),
+                "dataset_stats": project["evaluation"].get("dataset_stats", {}),
+                "best_params": project.get("tuning", {}).get("best_params"),
+                "n_estimators_used": project.get("final_model", {}).get("n_estimators"),
             }
         )
     elif "results" in project:

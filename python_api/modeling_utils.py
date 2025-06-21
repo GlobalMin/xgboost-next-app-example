@@ -250,6 +250,47 @@ def compute_lift_chart_data(
     return lift_data
 
 
+def compute_multi_source_lift_chart_data(
+    cv_y_true: Optional[np.ndarray] = None,
+    cv_y_pred_proba: Optional[np.ndarray] = None,
+    test_y_true: Optional[np.ndarray] = None,
+    test_y_pred_proba: Optional[np.ndarray] = None,
+    n_bins: int = 10,
+) -> Dict[str, List[Dict[str, Any]]]:
+    """Compute lift chart data for CV, test, and combined predictions
+
+    Returns a dictionary with keys:
+    - 'all': Combined CV and test data
+    - 'cv': CV data only
+    - 'test': Test data only
+    """
+    result = {}
+
+    # Compute lift chart for test data only
+    if test_y_true is not None and test_y_pred_proba is not None:
+        result["test"] = compute_lift_chart_data(test_y_true, test_y_pred_proba, n_bins)
+
+    # Compute lift chart for CV data only
+    if cv_y_true is not None and cv_y_pred_proba is not None:
+        result["cv"] = compute_lift_chart_data(cv_y_true, cv_y_pred_proba, n_bins)
+
+    # Compute lift chart for combined data
+    if (
+        cv_y_true is not None
+        and cv_y_pred_proba is not None
+        and test_y_true is not None
+        and test_y_pred_proba is not None
+    ):
+        # Combine CV and test data
+        combined_y_true = np.concatenate([cv_y_true, test_y_true])
+        combined_y_pred_proba = np.concatenate([cv_y_pred_proba, test_y_pred_proba])
+        result["all"] = compute_lift_chart_data(
+            combined_y_true, combined_y_pred_proba, n_bins
+        )
+
+    return result
+
+
 def calculate_test_metrics(
     y_true: np.ndarray, y_pred_proba: np.ndarray, threshold: float = 0.5
 ) -> Dict[str, Any]:
@@ -291,6 +332,9 @@ def build_results_dict(
     test_metrics: Optional[Dict[str, float]] = None,
     feature_names: Optional[List[str]] = None,
     cv_auc_std: Optional[float] = None,
+    train_size: Optional[int] = None,
+    test_size: Optional[int] = None,
+    dataset_info: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Atomic: Prepare final results dictionary"""
     results = {
@@ -301,6 +345,8 @@ def build_results_dict(
         "lift_chart_data": lift_data,
         "model_params": best_params,
         "n_estimators": int(n_estimators),
+        "train_size": train_size,
+        "test_size": test_size,
     }
 
     # Add feature names if provided
@@ -313,6 +359,9 @@ def build_results_dict(
 
     if preprocessing_artifacts:
         results["preprocessing_artifacts"] = preprocessing_artifacts
+
+    if dataset_info:
+        results["dataset_info"] = dataset_info
 
     return results
 
@@ -369,3 +418,52 @@ def execute_hyperparameter_search(
     )
 
     return best_params, best_score, best_n_estimators, best_std
+
+
+def generate_cv_predictions(
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    params: Dict[str, Any],
+    cv_folds: int,
+    num_rounds: int,
+) -> np.ndarray:
+    """Generate out-of-sample predictions for all training data using cross-validation
+
+    Returns:
+        Array of predictions for all training samples
+    """
+    from sklearn.model_selection import StratifiedKFold
+
+    # Initialize predictions array
+    n_samples = len(y_train)
+    cv_predictions = np.zeros(n_samples)
+
+    # Create stratified k-fold
+    skf = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=42)
+
+    for train_idx, val_idx in skf.split(X_train, y_train):
+        # Get fold data
+        X_fold_train = X_train.iloc[train_idx]
+        X_fold_val = X_train.iloc[val_idx]
+        y_fold_train = y_train.iloc[train_idx]
+        y_fold_val = y_train.iloc[val_idx]
+
+        # Create DMatrix objects for this fold
+        fold_dtrain = xgb.DMatrix(X_fold_train, label=y_fold_train)
+        fold_dval = xgb.DMatrix(X_fold_val, label=y_fold_val)
+
+        # Train model on this fold
+        fold_model = xgb.train(
+            params=params,
+            dtrain=fold_dtrain,
+            num_boost_round=num_rounds,
+            verbose_eval=False,
+        )
+
+        # Get predictions for validation fold
+        fold_predictions = fold_model.predict(fold_dval)
+
+        # Store predictions in the correct positions
+        cv_predictions[val_idx] = fold_predictions
+
+    return cv_predictions

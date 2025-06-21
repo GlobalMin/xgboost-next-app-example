@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import { TrendingUp } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -25,19 +24,8 @@ interface LiftChartProps {
 }
 
 export function LiftChart({ data }: LiftChartProps) {
-  console.log("LiftChart component rendered with data:", data);
-
   if (!data || data.length === 0) {
-    console.warn("LiftChart: No data provided or empty data array");
-    return (
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex items-center space-x-2 mb-4">
-          <TrendingUp className="h-5 w-5 text-blue-600" />
-          <h3 className="text-lg font-semibold">Model Lift Chart</h3>
-        </div>
-        <p className="text-gray-500">No data available for lift chart</p>
-      </div>
-    );
+    return <p className="text-gray-500">No data available for lift chart</p>;
   }
 
   // Transform data for Recharts
@@ -50,7 +38,13 @@ export function LiftChart({ data }: LiftChartProps) {
     count: item.count,
   }));
 
-  console.log("Transformed chart data:", chartData);
+  // Calculate min and max for better Y-axis scaling
+  const allRates = chartData.flatMap((d) => [
+    d["Predicted Rate"],
+    d["Actual Rate"],
+  ]);
+  const minRate = Math.max(0, Math.floor(Math.min(...allRates) * 0.9)); // 10% padding below, but never below 0
+  const maxRate = Math.min(100, Math.ceil(Math.max(...allRates) * 1.1)); // 10% padding above, but never above 100%
 
   // Custom tooltip
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -69,36 +63,35 @@ export function LiftChart({ data }: LiftChartProps) {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <div className="flex items-center space-x-2 mb-4">
-        <TrendingUp className="h-5 w-5 text-blue-600" />
-        <h3 className="text-lg font-semibold">Model Lift Chart</h3>
-      </div>
-
+    <>
       <div className="mb-4">
         <p className="text-sm text-gray-600">
           Comparison of predicted probabilities vs actual outcomes across
           deciles
         </p>
+        <p className="text-xs text-gray-500 mt-1">
+          Total records in chart:{" "}
+          {data.reduce((sum, item) => sum + item.count, 0).toLocaleString()}
+        </p>
       </div>
 
       {/* Chart */}
       <div className="w-full overflow-x-auto">
-        <div className="h-96" style={{ minWidth: "800px" }}>
+        <div className="h-[500px]" style={{ minWidth: "900px" }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
               data={chartData}
               margin={{
-                top: 20,
-                right: 30,
-                left: 40,
-                bottom: 60,
+                top: 30,
+                right: 40,
+                left: 50,
+                bottom: 80,
               }}
             >
-              <CartesianGrid strokeDasharray="3 3" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
               <XAxis
                 dataKey="bin"
-                tick={{ fontSize: 10 }}
+                tick={{ fontSize: 11 }}
                 interval={0}
                 angle={-45}
                 textAnchor="end"
@@ -109,33 +102,43 @@ export function LiftChart({ data }: LiftChartProps) {
                   value: "Rate (%)",
                   angle: -90,
                   position: "insideLeft",
+                  offset: -10,
                 }}
                 tick={{ fontSize: 12 }}
-                domain={[0, "auto"]}
+                domain={[minRate, maxRate]}
                 tickFormatter={(value) => `${value}%`}
               />
               <Tooltip content={<CustomTooltip />} />
-              <Legend />
+              <Legend
+                verticalAlign="top"
+                height={36}
+                iconType="line"
+                wrapperStyle={{
+                  paddingBottom: "10px",
+                }}
+              />
               <Line
                 type="monotone"
                 dataKey="Predicted Rate"
                 stroke="#3B82F6"
                 strokeWidth={3}
-                dot={{ fill: "#3B82F6", strokeWidth: 2, r: 4 }}
+                dot={{ fill: "#3B82F6", strokeWidth: 2, r: 5 }}
                 name="Predicted Rate"
+                activeDot={{ r: 7 }}
               />
               <Line
                 type="monotone"
                 dataKey="Actual Rate"
                 stroke="#10B981"
                 strokeWidth={3}
-                dot={{ fill: "#10B981", strokeWidth: 2, r: 4 }}
+                dot={{ fill: "#10B981", strokeWidth: 2, r: 5 }}
                 name="Actual Rate"
+                activeDot={{ r: 7 }}
               />
             </LineChart>
           </ResponsiveContainer>
         </div>
       </div>
-    </div>
+    </>
   );
 }

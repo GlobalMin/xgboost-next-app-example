@@ -12,13 +12,13 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from modeling_utils import (
-    load_dataset,
-    preprocess_data,
-    create_train_test_split,
-    generate_parameter_grid,
-    calculate_feature_importance,
-    calculate_lift_chart,
-    cross_validate_params,
+    read_csv_file,
+    process_raw_features,
+    split_train_test,
+    build_param_grid,
+    extract_feature_importance,
+    compute_lift_chart_data,
+    run_cross_validation,
 )
 
 
@@ -32,7 +32,7 @@ class TestLoadDataset:
         filename = os.path.basename(temp_csv_file)
 
         with patch("modeling_utils.UPLOAD_DIR", upload_dir):
-            df = load_dataset(filename)
+            df = read_csv_file(filename)
 
             assert isinstance(df, pd.DataFrame)
             assert len(df) > 0
@@ -41,7 +41,7 @@ class TestLoadDataset:
     def test_load_nonexistent_dataset(self):
         """Test loading a non-existent CSV file"""
         with pytest.raises(FileNotFoundError) as exc_info:
-            load_dataset("nonexistent.csv")
+            read_csv_file("nonexistent.csv")
 
         assert "Dataset file not found" in str(exc_info.value)
 
@@ -59,7 +59,9 @@ class TestPreprocessData:
         ]
         target_col = "target"
 
-        X, y, artifacts = preprocess_data(sample_dataframe, feature_cols, target_col)
+        X, y, artifacts = process_raw_features(
+            sample_dataframe, feature_cols, target_col
+        )
 
         # Check output types
         assert isinstance(X, pd.DataFrame)
@@ -84,7 +86,7 @@ class TestPreprocessData:
         sample_dataframe.loc[0:5, "target"] = np.nan
 
         with pytest.raises(ValueError) as exc_info:
-            preprocess_data(sample_dataframe, ["numeric_feature_1"], "target")
+            process_raw_features(sample_dataframe, ["numeric_feature_1"], "target")
 
         assert "Target column contains missing values" in str(exc_info.value)
 
@@ -94,7 +96,7 @@ class TestPreprocessData:
             {"feature1": [1, 2, 3, 4, 5], "target": ["A", "B", "A", "B", "A"]}
         )
 
-        X, y, artifacts = preprocess_data(df, ["feature1"], "target")
+        X, y, artifacts = process_raw_features(df, ["feature1"], "target")
 
         # Target should be encoded to numeric
         assert y.dtype in [np.int32, np.int64]
@@ -114,7 +116,7 @@ class TestPreprocessData:
             }
         )
 
-        X, y, artifacts = preprocess_data(df, ["feature1", "feature2"], "target")
+        X, y, artifacts = process_raw_features(df, ["feature1", "feature2"], "target")
 
         # Check imputation worked
         assert not X.isnull().any().any()
@@ -129,7 +131,7 @@ class TestCreateTrainTestSplit:
         X = sample_dataframe.drop("target", axis=1)
         y = sample_dataframe["target"]
 
-        X_train, X_test, y_train, y_test = create_train_test_split(X, y, test_size=0.2)
+        X_train, X_test, y_train, y_test = split_train_test(X, y, test_size=0.2)
 
         # Check sizes
         assert len(X_train) == 80  # 80% of 100
@@ -155,7 +157,7 @@ class TestCreateTrainTestSplit:
         X = df[["feature1"]]
         y = df["target"]
 
-        X_train, X_test, y_train, y_test = create_train_test_split(X, y, test_size=0.2)
+        X_train, X_test, y_train, y_test = split_train_test(X, y, test_size=0.2)
 
         # Check class distribution is maintained
         train_ratio = (y_train == 1).sum() / len(y_train)
@@ -171,7 +173,7 @@ class TestGenerateParameterGrid:
     def test_generate_single_param_grid(self):
         """Test grid generation with single parameter"""
         grid = {"max_depth": [3, 4, 5]}
-        combinations = generate_parameter_grid(grid)
+        combinations = build_param_grid(grid)
 
         assert len(combinations) == 3
         assert combinations[0] == {"max_depth": 3}
@@ -181,7 +183,7 @@ class TestGenerateParameterGrid:
     def test_generate_multi_param_grid(self):
         """Test grid generation with multiple parameters"""
         grid = {"max_depth": [3, 4], "learning_rate": [0.1, 0.01], "subsample": [0.8]}
-        combinations = generate_parameter_grid(grid)
+        combinations = build_param_grid(grid)
 
         assert len(combinations) == 4  # 2 * 2 * 1
 
@@ -198,7 +200,7 @@ class TestGenerateParameterGrid:
 
     def test_empty_grid(self):
         """Test empty parameter grid"""
-        combinations = generate_parameter_grid({})
+        combinations = build_param_grid({})
         assert len(combinations) == 1
         assert combinations[0] == {}
 
@@ -213,7 +215,7 @@ class TestCalculateFeatureImportance:
         mock_model.get_score.return_value = {"f0": 100, "f1": 50, "f2": 25}
 
         feature_names = ["feature_a", "feature_b", "feature_c"]
-        importance = calculate_feature_importance(mock_model, feature_names)
+        importance = extract_feature_importance(mock_model, feature_names)
 
         assert len(importance) == 3
         assert importance["feature_a"] == 100.0
@@ -230,7 +232,7 @@ class TestCalculateFeatureImportance:
         ]
 
         feature_names = ["feature_a", "feature_b", "feature_c"]
-        importance = calculate_feature_importance(mock_model, feature_names)
+        importance = extract_feature_importance(mock_model, feature_names)
 
         assert importance["feature_a"] == 100.0
         assert importance["feature_b"] == 50.0
@@ -246,7 +248,7 @@ class TestCalculateFeatureImportance:
         ]
 
         feature_names = ["feature_a", "feature_b"]
-        importance = calculate_feature_importance(mock_model, feature_names)
+        importance = extract_feature_importance(mock_model, feature_names)
 
         assert importance["feature_a"] == 10.0
         assert importance["feature_b"] == 20.0
@@ -261,7 +263,7 @@ class TestCalculateLiftChart:
         y_true = np.array([0, 0, 0, 0, 0, 1, 1, 1, 1, 1])
         y_pred = np.array([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
 
-        lift_data = calculate_lift_chart(y_true, y_pred, n_bins=2)
+        lift_data = compute_lift_chart_data(y_true, y_pred, n_bins=2)
 
         assert len(lift_data) == 2
 
@@ -282,7 +284,7 @@ class TestCalculateLiftChart:
         y_true = np.random.choice([0, 1], n_samples)
         y_pred = np.random.rand(n_samples)
 
-        lift_data = calculate_lift_chart(y_true, y_pred, n_bins=5)
+        lift_data = compute_lift_chart_data(y_true, y_pred, n_bins=5)
 
         assert len(lift_data) <= 5  # May be less due to duplicates
 
@@ -314,7 +316,7 @@ class TestCrossValidateParams:
         mock_dtrain = MagicMock(spec=xgb.DMatrix)
         params = {"max_depth": 3, "learning_rate": 0.1}
 
-        mean_score, std_score, optimal_rounds = cross_validate_params(
+        mean_score, std_score, optimal_rounds = run_cross_validation(
             mock_dtrain, params, cv_folds=3, num_rounds=100, early_stopping_rounds=10
         )
 
@@ -330,7 +332,7 @@ class TestCrossValidateParams:
         mock_dtrain = MagicMock(spec=xgb.DMatrix)
         params = {"max_depth": 3}
 
-        mean_score, std_score, optimal_rounds = cross_validate_params(
+        mean_score, std_score, optimal_rounds = run_cross_validation(
             mock_dtrain, params, cv_folds=3, num_rounds=100, early_stopping_rounds=10
         )
 

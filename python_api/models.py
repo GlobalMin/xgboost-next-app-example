@@ -1,7 +1,9 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Dict, Any, Optional
 import pandas as pd
 import xgboost as xgb
+import numpy as np
+from xgb_params import validate_param_grid
 
 
 class TrainRequest(BaseModel):
@@ -16,6 +18,15 @@ class TrainRequest(BaseModel):
     early_stopping_rounds: int = 50
     objective: str = "binary:logistic"
     custom_param_grid: Optional[Dict[str, List[Any]]] = None
+
+    @field_validator("custom_param_grid")
+    @classmethod
+    def validate_custom_param_grid(cls, v):
+        if v is not None:
+            is_valid, errors = validate_param_grid(v)
+            if not is_valid:
+                raise ValueError(f"Invalid parameter grid: {'; '.join(errors)}")
+        return v
 
 
 class ModelInfo(BaseModel):
@@ -60,3 +71,4 @@ class TrainingResult(BaseModel):
     cv_auc: float
     cv_auc_std: float
     best_n_estimators: int
+    cv_predictions: Optional[np.ndarray] = None

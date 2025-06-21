@@ -181,7 +181,11 @@ def update_project_results(project_id: str, results: Dict[str, Any]) -> bool:
             "lift_chart": {
                 "bins": 10,
                 "data": clean_results.get("lift_chart_data", []),
+                "data_multi": clean_results.get("lift_chart_data_multi", {}),
             },
+            "train_size": clean_results.get("train_size"),
+            "test_size": clean_results.get("test_size"),
+            "dataset_stats": clean_results.get("dataset_info", {}),
         },
     }
 

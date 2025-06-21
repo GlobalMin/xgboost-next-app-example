@@ -24,11 +24,12 @@ from modeling_utils import (
     split_train_test,
     fit_xgb_model,
     extract_feature_importance,
-    compute_lift_chart_data,
+    compute_multi_source_lift_chart_data,
     calculate_test_metrics,
     write_model_file,
     build_results_dict,
     execute_hyperparameter_search,
+    generate_cv_predictions,
 )
 from preprocessing import preprocess_data, get_preprocessing_artifacts
 
@@ -118,6 +119,11 @@ def prepare_training_data(
         "train_size": len(X_train),
         "test_size": len(X_test),
         "feature_columns": request.feature_columns,
+        "target_rate": float(
+            y.mean()
+        ),  # For binary classification, this is the positive class rate
+        "total_columns": len(df.columns),
+        "n_features_used": len(request.feature_columns),
     }
 
     return DataPreparationResult(
@@ -142,7 +148,11 @@ def get_param_grid(request: TrainRequest) -> Dict[str, Any]:
 
 
 def train_and_tune_xgboost_model(
-    dtrain: xgb.DMatrix, dtest: xgb.DMatrix, request: TrainRequest, project_id: str
+    dtrain: xgb.DMatrix,
+    dtest: xgb.DMatrix,
+    data_prep_result: DataPreparationResult,
+    request: TrainRequest,
+    project_id: str,
 ) -> TrainingResult:
     """Phase 3: Train and tune the XGBoost model"""
     update_project_status(project_id, "Tuning xgboost for best hyperparameters")
@@ -181,6 +191,24 @@ def train_and_tune_xgboost_model(
     }
     update_project_tuning_results(project_id, tuning_results)
 
+    # Generate CV predictions for the best parameters
+    logger.info(
+        "Generating cross-validation predictions for best params...",
+        extra={"project_id": project_id},
+    )
+
+    # Combine objective with tuned params for CV predictions
+    cv_params = {"objective": request.objective}
+    cv_params.update(best_params)
+
+    cv_predictions = generate_cv_predictions(
+        data_prep_result.X_train,
+        data_prep_result.y_train,
+        cv_params,
+        request.cv_folds,
+        best_n_estimators,
+    )
+
     # Train final model with best parameters
     update_project_status(project_id, "Finalizing model and calculating metrics")
 
@@ -201,6 +229,7 @@ def train_and_tune_xgboost_model(
         cv_auc=cv_auc,
         cv_auc_std=cv_auc_std,
         best_n_estimators=best_n_estimators,
+        cv_predictions=cv_predictions,
     )
 
 
@@ -221,9 +250,23 @@ def process_and_save_results(
     feature_importance = extract_feature_importance(
         training_result.model, request.feature_columns
     )
-    lift_data = compute_lift_chart_data(
-        data_prep_result.y_test.to_numpy(), y_pred_proba
+
+    # Compute multi-source lift chart data
+    lift_chart_data = compute_multi_source_lift_chart_data(
+        cv_y_true=data_prep_result.y_train.to_numpy()
+        if training_result.cv_predictions is not None
+        else None,
+        cv_y_pred_proba=training_result.cv_predictions
+        if training_result.cv_predictions is not None
+        else None,
+        test_y_true=data_prep_result.y_test.to_numpy(),
+        test_y_pred_proba=y_pred_proba,
+        n_bins=10,
     )
+
+    # Use the combined 'all' data for the default lift chart
+    lift_data = lift_chart_data.get("all", lift_chart_data.get("test", []))
+
     test_metrics = calculate_test_metrics(
         data_prep_result.y_test.to_numpy(), y_pred_proba
     )
@@ -244,7 +287,13 @@ def process_and_save_results(
         test_metrics,
         request.feature_columns,  # Pass feature names
         training_result.cv_auc_std,  # Pass CV std
+        data_prep_result.dataset_info.get("train_size"),
+        data_prep_result.dataset_info.get("test_size"),
+        data_prep_result.dataset_info,  # Pass full dataset info
     )
+
+    # Add multi-source lift chart data to results
+    results["lift_chart_data_multi"] = lift_chart_data
 
     # Update project in database
     update_project_results(project_id, results)
@@ -264,7 +313,11 @@ def run_xgboost_training_flow(project_id: str, request: TrainRequest) -> Dict[st
 
         # Phase 2: Train and tune the XGBoost model
         training_result = train_and_tune_xgboost_model(
-            data_prep_result.dtrain, data_prep_result.dtest, request, project_id
+            data_prep_result.dtrain,
+            data_prep_result.dtest,
+            data_prep_result,
+            request,
+            project_id,
         )
 
         # Phase 4: Process results and save everything
