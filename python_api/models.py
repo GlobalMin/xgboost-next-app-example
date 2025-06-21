@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator, Field
+from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 
 
@@ -15,24 +15,6 @@ class TrainRequest(BaseModel):
     early_stopping_rounds: int = 50
     objective: str = "binary:logistic"
     custom_param_grid: Optional[Dict[str, List[Any]]] = None
-
-    @field_validator("custom_param_grid")
-    @classmethod
-    def validate_custom_param_grid(
-        cls, v: Optional[Dict[str, List[Any]]]
-    ) -> Optional[Dict[str, List[Any]]]:
-        """Validate custom parameter grid if provided"""
-        if v is None:
-            return v
-
-        from xgb_params import validate_param_grid
-
-        is_valid, errors = validate_param_grid(v)
-
-        if not is_valid:
-            raise ValueError(f"Invalid parameter grid: {'; '.join(errors)}")
-
-        return v
 
 
 class ModelInfo(BaseModel):

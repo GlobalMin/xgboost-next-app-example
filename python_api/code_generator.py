@@ -4,6 +4,7 @@ import json
 from typing import Dict, List
 from textwrap import dedent
 
+
 def generate_training_code(
     csv_filename: str,
     feature_columns: List[str],
@@ -13,14 +14,14 @@ def generate_training_code(
     preprocessing_artifacts: Dict,
     n_estimators: int,
     objective: str = "binary:logistic",
-    eval_metric: str = "auc"
+    eval_metric: str = "auc",
 ) -> str:
     """Generate standalone Python code to reproduce XGBoost training."""
-    
+
     # Convert preprocessing artifacts to code-friendly format
     numeric_columns = preprocessing_artifacts.get("numeric_columns", [])
     categorical_columns = preprocessing_artifacts.get("categorical_columns", [])
-    
+
     code = dedent(f'''
 import pandas as pd
 import numpy as np

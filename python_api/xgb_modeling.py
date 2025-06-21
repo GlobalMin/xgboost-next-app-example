@@ -5,7 +5,7 @@ from sklearn.metrics import roc_auc_score
 from typing import Dict, Any
 
 
-from python_api.models import TrainRequest
+from models import TrainRequest
 from mongo_utils import (
     update_project_results,
     cleanup_failed_project,
@@ -36,10 +36,7 @@ def train_xgboost_model(project_id: str, request: TrainRequest) -> Dict[str, Any
     try:
         # Step 1: Load and prepare data
         update_project_status(project_id, "Loading and processing data")
-        logger.debug(
-            "Updated status to 'Loading and processing data'",
-            extra={"project_id": project_id},
-        )
+
         logger.info("Loading dataset...", extra={"project_id": project_id})
         df = load_dataset(request.csv_filename)
 
@@ -82,10 +79,7 @@ def train_xgboost_model(project_id: str, request: TrainRequest) -> Dict[str, Any
         # Step 4: Train model (with or without hyperparameter tuning)
         if request.tune_parameters:
             update_project_status(project_id, "Tuning xgboost for best hyperparameters")
-            logger.debug(
-                "Updated status to 'Tuning xgboost for best hyperparameters'",
-                extra={"project_id": project_id},
-            )
+
             logger.info(
                 "Starting hyperparameter tuning...", extra={"project_id": project_id}
             )
@@ -116,10 +110,6 @@ def train_xgboost_model(project_id: str, request: TrainRequest) -> Dict[str, Any
             update_project_status(
                 project_id, "Finalizing model and calculating metrics"
             )
-            logger.debug(
-                "Updated status to 'Finalizing model and calculating metrics'",
-                extra={"project_id": project_id},
-            )
 
             final_params = {**base_params, **best_params}
             logger.info(
@@ -131,10 +121,7 @@ def train_xgboost_model(project_id: str, request: TrainRequest) -> Dict[str, Any
 
         else:
             update_project_status(project_id, "Training xgboost model")
-            logger.debug(
-                "Updated status to 'Training xgboost model'",
-                extra={"project_id": project_id},
-            )
+
             # No hyperparameter tuning, use base parameters
             logger.info(
                 "Training model without parameter tuning...",

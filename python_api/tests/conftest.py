@@ -1,4 +1,5 @@
 """Pytest configuration and shared fixtures"""
+
 import pytest
 import pandas as pd
 import numpy as np
@@ -11,33 +12,33 @@ def sample_dataframe():
     """Create a sample DataFrame for testing"""
     np.random.seed(42)
     n_samples = 100
-    
+
     data = {
-        'numeric_feature_1': np.random.randn(n_samples),
-        'numeric_feature_2': np.random.randint(0, 100, n_samples),
-        'categorical_feature_1': np.random.choice(['A', 'B', 'C'], n_samples),
-        'categorical_feature_2': np.random.choice(['X', 'Y', 'Z'], n_samples),
-        'target': np.random.choice([0, 1], n_samples)
+        "numeric_feature_1": np.random.randn(n_samples),
+        "numeric_feature_2": np.random.randint(0, 100, n_samples),
+        "categorical_feature_1": np.random.choice(["A", "B", "C"], n_samples),
+        "categorical_feature_2": np.random.choice(["X", "Y", "Z"], n_samples),
+        "target": np.random.choice([0, 1], n_samples),
     }
-    
+
     df = pd.DataFrame(data)
-    
+
     # Add some missing values
-    df.loc[5:10, 'numeric_feature_1'] = np.nan
-    df.loc[15:20, 'categorical_feature_1'] = np.nan
-    
+    df.loc[5:10, "numeric_feature_1"] = np.nan
+    df.loc[15:20, "categorical_feature_1"] = np.nan
+
     return df
 
 
 @pytest.fixture
 def temp_csv_file(sample_dataframe):
     """Create a temporary CSV file with sample data"""
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
         sample_dataframe.to_csv(f, index=False)
         temp_path = f.name
-    
+
     yield temp_path
-    
+
     # Cleanup
     os.unlink(temp_path)
 
@@ -54,7 +55,7 @@ def valid_train_request():
         "cv_folds": 3,
         "tune_parameters": True,
         "early_stopping_rounds": 50,
-        "objective": "binary:logistic"
+        "objective": "binary:logistic",
     }
 
 

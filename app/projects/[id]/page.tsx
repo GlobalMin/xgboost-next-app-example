@@ -52,7 +52,7 @@ export default function ProjectView() {
     setCodeLoading(true);
     try {
       const response = await fetch(
-        `http://localhost:8000/api/projects/${projectId}/generate-code`
+        `http://localhost:8000/api/projects/${projectId}/generate-code`,
       );
       if (response.ok) {
         const data = await response.json();
@@ -158,9 +158,12 @@ export default function ProjectView() {
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
                   <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] flex flex-col">
                     <div className="p-4 border-b">
-                      <h2 className="text-xl font-semibold">Generated Python Code</h2>
+                      <h2 className="text-xl font-semibold">
+                        Generated Python Code
+                      </h2>
                       <p className="text-sm text-gray-600 mt-1">
-                        This code reproduces the exact XGBoost model training process
+                        This code reproduces the exact XGBoost model training
+                        process
                       </p>
                     </div>
                     <div className="flex-1 overflow-auto p-4">

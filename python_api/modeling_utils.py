@@ -43,7 +43,9 @@ def preprocess_data(
         raise ValueError("Target column contains missing values")
 
     # Convert datetime columns to strings before processing
-    datetime_columns = X.select_dtypes(include=['datetime', 'datetime64', 'datetime64[ns]']).columns.tolist()
+    datetime_columns = X.select_dtypes(
+        include=["datetime", "datetime64", "datetime64[ns]"]
+    ).columns.tolist()
     for col in datetime_columns:
         X[col] = X[col].astype(str)
 
@@ -264,10 +266,10 @@ def prepare_results(
         "model_params": best_params,
         "n_estimators": int(n_estimators),
     }
-    
+
     if preprocessing_artifacts:
         results["preprocessing_artifacts"] = preprocessing_artifacts
-    
+
     return results
 
 

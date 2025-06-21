@@ -82,6 +82,16 @@ def run_training_task(project_id: str, request: TrainRequest):
 @router.post("/train")
 async def train_project(request: TrainRequest, background_tasks: BackgroundTasks):
     """Start project training with provided configuration"""
+    # Validate custom parameter grid if provided
+    if request.custom_param_grid:
+        from xgb_params import validate_param_grid
+
+        is_valid, errors = validate_param_grid(request.custom_param_grid)
+        if not is_valid:
+            raise HTTPException(
+                status_code=400, detail=f"Invalid parameter grid: {'; '.join(errors)}"
+            )
+
     # Create project document in MongoDB
     project_data = {
         "name": request.model_name,
@@ -375,22 +385,22 @@ async def generate_project_code(project_id: str):
         project = get_project(project_id)
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
-        
+
         # Check if training is complete
         if project["status"] != "completed":
             raise HTTPException(
-                status_code=400, 
-                detail="Code generation is only available for completed models"
+                status_code=400,
+                detail="Code generation is only available for completed models",
             )
-        
+
         # Extract necessary information
         dataset = project["dataset"]
         config = project["config"]
         results = project.get("results", {})
-        
+
         # Get preprocessing artifacts
         preprocessing_artifacts = results.get("preprocessing_artifacts", {})
-        
+
         # Get model parameters
         model_params = results.get("model_params", {})
         if "objective" in model_params:
@@ -401,7 +411,7 @@ async def generate_project_code(project_id: str):
             del model_params["seed"]  # Will be set separately
         if "nthread" in model_params:
             del model_params["nthread"]  # Will be set separately
-        
+
         # Generate the code
         code = generate_training_code(
             csv_filename=dataset["filename"],
@@ -412,20 +422,19 @@ async def generate_project_code(project_id: str):
             preprocessing_artifacts=preprocessing_artifacts,
             n_estimators=results.get("n_estimators", 100),
             objective=config.get("objective", "binary:logistic"),
-            eval_metric=config.get("eval_metric", "auc")
+            eval_metric=config.get("eval_metric", "auc"),
         )
-        
+
         return {
             "project_id": project_id,
             "project_name": project["name"],
             "code": code,
-            "filename": f"{project['name'].replace(' ', '_').lower()}_training.py"
+            "filename": f"{project['name'].replace(' ', '_').lower()}_training.py",
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=500, 
-            detail=f"Failed to generate code: {str(e)}"
+            status_code=500, detail=f"Failed to generate code: {str(e)}"
         )
