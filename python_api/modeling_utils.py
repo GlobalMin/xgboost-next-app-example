@@ -161,6 +161,7 @@ def run_cross_validation(
         nfold=cv_folds,
         stratified=True,
         seed=42,
+        metrics=["auc"],  # Explicitly specify AUC metric for CV
         early_stopping_rounds=early_stopping_rounds,
         verbose_eval=False,
     )
@@ -275,7 +276,7 @@ def build_results_dict(
 
 def execute_hyperparameter_search(
     dtrain: xgb.DMatrix,
-    base_params: Dict[str, Any],
+    objective: str,
     param_grid: Dict[str, List],
     cv_folds: int,
     early_stopping_rounds: int,
@@ -297,7 +298,9 @@ def execute_hyperparameter_search(
     best_n_estimators = 100
 
     for idx, params in enumerate(param_combinations):
-        cv_params = {**base_params, **params}
+        # Create params dict with objective and tuning params
+        cv_params = {"objective": objective}
+        cv_params.update(params)
 
         mean_score, _, optimal_rounds = run_cross_validation(
             dtrain, cv_params, cv_folds, 500, early_stopping_rounds

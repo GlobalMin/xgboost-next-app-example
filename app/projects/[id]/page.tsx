@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import { ModelResults } from "@/components/model-results";
 import { TrainingProgress } from "@/components/training-progress";
@@ -15,13 +15,22 @@ export default function ProjectView() {
   const [showCode, setShowCode] = useState(false);
   const [generatedCode, setGeneratedCode] = useState<string>("");
   const [codeLoading, setCodeLoading] = useState(false);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (projectId) {
       fetchProject();
-      const interval = setInterval(fetchProject, 5000); // Poll for updates if still training
-      return () => clearInterval(interval);
+
+      // Set up polling interval
+      intervalRef.current = setInterval(fetchProject, 5000); // Poll for updates if still training
     }
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
   }, [projectId]);
 
   const fetchProject = async () => {
@@ -36,15 +45,33 @@ export default function ProjectView() {
         // Stop polling if project is completed or failed
         if (data.status === "completed" || data.status === "failed") {
           setLoading(false);
+
+          // Clear the polling interval
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+          }
         }
       } else {
         setError("Project not found");
         setLoading(false);
+
+        // Clear interval on error
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
       }
     } catch (error) {
       console.error("Failed to fetch project:", error);
       setError("Failed to load project");
       setLoading(false);
+
+      // Clear interval on error
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     }
   };
 

@@ -45,7 +45,8 @@ if y.dtype == "object":
 
 # Train
 params = {json.dumps(model_params, indent=4)}
-params.update({{"objective": "{objective}", "eval_metric": "{eval_metric}", "seed": 42, "nthread": -1}})
+# Only override the objective - let XGBoost use its defaults for everything else
+params["objective"] = "{objective}"
 
 model = xgb.train(
     params,

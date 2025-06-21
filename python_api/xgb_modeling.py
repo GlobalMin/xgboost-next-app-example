@@ -7,7 +7,6 @@ from typing import Dict, Any
 from models import (
     TrainRequest,
     DataPreparationResult,
-    ModelConfiguration,
     TrainingResult,
 )
 from mongo_utils import (
@@ -19,7 +18,6 @@ from logging_config import get_logger
 from xgb_params import DEFAULT_PARAM_GRID
 from modeling_utils import (
     read_csv_file,
-    process_raw_features,
     split_train_test,
     fit_xgb_model,
     extract_feature_importance,
@@ -28,6 +26,7 @@ from modeling_utils import (
     build_results_dict,
     execute_hyperparameter_search,
 )
+from preprocessing import preprocess_data, get_preprocessing_artifacts
 
 
 # Get logger for this module
@@ -44,8 +43,16 @@ def prepare_training_data(
     df = read_csv_file(request.csv_filename)
 
     logger.info("Preprocessing data...", extra={"project_id": project_id})
-    X, y, preprocessing_artifacts = process_raw_features(
+    X, y, pipeline, preprocessing_info = preprocess_data(
         df, request.feature_columns, request.target_column
+    )
+
+    # Get preprocessing artifacts in backward-compatible format
+    preprocessing_artifacts = get_preprocessing_artifacts(pipeline, preprocessing_info)
+
+    # Add pipeline code to artifacts for storage
+    preprocessing_artifacts["pipeline_code"] = preprocessing_info.get(
+        "pipeline_code", ""
     )
 
     # Log preprocessing information
@@ -92,42 +99,30 @@ def prepare_training_data(
     )
 
 
-def setup_model_params(request: TrainRequest) -> ModelConfiguration:
-    """Phase 2: Setup model parameters and configuration"""
-    # Set up base parameters
-    base_params = {
-        "objective": request.objective,
-        "eval_metric": "auc",
-        "seed": 42,
-        "nthread": -1,
-    }
-
+def get_param_grid(request: TrainRequest) -> Dict[str, Any]:
+    """Phase 2: Get parameter grid for tuning"""
     # Use custom parameter grid if provided, otherwise use default
     if request.custom_param_grid:
-        param_grid = request.custom_param_grid
+        return request.custom_param_grid
     else:
-        param_grid = DEFAULT_PARAM_GRID
-
-    return ModelConfiguration(
-        base_params=base_params,
-        param_grid=param_grid,
-        cv_folds=request.cv_folds,
-        early_stopping_rounds=request.early_stopping_rounds,
-    )
+        return DEFAULT_PARAM_GRID
 
 
 def train_and_tune_xgboost_model(
-    dtrain: xgb.DMatrix, dtest: xgb.DMatrix, config: ModelConfiguration, project_id: str
+    dtrain: xgb.DMatrix, dtest: xgb.DMatrix, request: TrainRequest, project_id: str
 ) -> TrainingResult:
     """Phase 3: Train and tune the XGBoost model"""
     update_project_status(project_id, "Tuning xgboost for best hyperparameters")
 
     logger.info("Starting hyperparameter tuning...", extra={"project_id": project_id})
 
+    # Get parameter grid
+    param_grid = get_param_grid(request)
+
     # Log parameter grid info
-    if isinstance(config.param_grid, dict) and len(config.param_grid) > 0:
+    if isinstance(param_grid, dict) and len(param_grid) > 0:
         logger.info(
-            f"Using parameter grid with {len(config.param_grid)} parameters",
+            f"Using parameter grid with {len(param_grid)} parameters",
             extra={"project_id": project_id},
         )
     else:
@@ -136,17 +131,20 @@ def train_and_tune_xgboost_model(
     # Tune hyperparameters
     best_params, cv_auc, best_n_estimators = execute_hyperparameter_search(
         dtrain,
-        config.base_params,
-        config.param_grid,
-        config.cv_folds,
-        config.early_stopping_rounds,
+        request.objective,
+        param_grid,
+        request.cv_folds,
+        request.early_stopping_rounds,
         project_id,
     )
 
     # Train final model with best parameters
     update_project_status(project_id, "Finalizing model and calculating metrics")
 
-    final_params = {**config.base_params, **best_params}
+    # Combine objective with tuned params
+    final_params = {"objective": request.objective}
+    final_params.update(best_params)
+
     logger.info(
         f"Training final model with best params, {best_n_estimators} rounds...",
         extra={"project_id": project_id},
@@ -179,7 +177,9 @@ def process_and_save_results(
     feature_importance = extract_feature_importance(
         training_result.model, request.feature_columns
     )
-    lift_data = compute_lift_chart_data(data_prep_result.y_test.to_numpy(), y_pred_proba)
+    lift_data = compute_lift_chart_data(
+        data_prep_result.y_test.to_numpy(), y_pred_proba
+    )
 
     # Save model
     _ = write_model_file(training_result.model, project_id)
@@ -212,12 +212,9 @@ def run_xgboost_training_flow(project_id: str, request: TrainRequest) -> Dict[st
         # Phase 1: Prepare all training data
         data_prep_result = prepare_training_data(project_id, request)
 
-        # Phase 2: Setup model parameters and configuration
-        model_config = setup_model_params(request)
-
-        # Phase 3: Train and tune the XGBoost model
+        # Phase 2: Train and tune the XGBoost model
         training_result = train_and_tune_xgboost_model(
-            data_prep_result.dtrain, data_prep_result.dtest, model_config, project_id
+            data_prep_result.dtrain, data_prep_result.dtest, request, project_id
         )
 
         # Phase 4: Process results and save everything

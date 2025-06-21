@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import pandas as pd
 import numpy as np
 
-from modeling_utils import preprocess_data
+from preprocessing import preprocess_data, get_preprocessing_artifacts
 
 
 class TestPreprocessingEdgeCases:
@@ -36,7 +36,8 @@ class TestPreprocessingEdgeCases:
             "numeric_feature",
         ]
 
-        X, y, artifacts = preprocess_data(df, feature_cols, "target")
+        X, y, pipeline, preprocessing_info = preprocess_data(df, feature_cols, "target")
+        artifacts = get_preprocessing_artifacts(pipeline, preprocessing_info)
 
         # Check that date columns are treated as categorical and encoded
         assert "date_feature" in artifacts["categorical_columns"]
@@ -108,7 +109,8 @@ class TestPreprocessingEdgeCases:
             "normal_feature",
         ]
 
-        X, y, artifacts = preprocess_data(df, feature_cols, "target")
+        X, y, pipeline, preprocessing_info = preprocess_data(df, feature_cols, "target")
+        artifacts = get_preprocessing_artifacts(pipeline, preprocessing_info)
 
         # Check that all character columns are treated as categorical
         assert "special_chars" in artifacts["categorical_columns"]
@@ -157,7 +159,8 @@ class TestPreprocessingEdgeCases:
 
         feature_cols = ["long_text", "description", "numeric_feature"]
 
-        X, y, artifacts = preprocess_data(df, feature_cols, "target")
+        X, y, pipeline, preprocessing_info = preprocess_data(df, feature_cols, "target")
+        artifacts = get_preprocessing_artifacts(pipeline, preprocessing_info)
 
         # Check that text columns are treated as categorical
         assert "long_text" in artifacts["categorical_columns"]
@@ -247,7 +250,8 @@ class TestPreprocessingEdgeCases:
             "extreme_lengths",
         ]
 
-        X, y, artifacts = preprocess_data(df, feature_cols, "target")
+        X, y, pipeline, preprocessing_info = preprocess_data(df, feature_cols, "target")
+        artifacts = get_preprocessing_artifacts(pipeline, preprocessing_info)
 
         # All should be treated as categorical
         assert len(artifacts["categorical_columns"]) == 5
@@ -313,14 +317,15 @@ class TestPreprocessingEdgeCases:
             "categorical",
         ]
 
-        X, y, artifacts = preprocess_data(df, feature_cols, "target")
+        X, y, pipeline, preprocessing_info = preprocess_data(df, feature_cols, "target")
+        artifacts = get_preprocessing_artifacts(pipeline, preprocessing_info)
 
         # Check that imputation handled NaN values
         assert not X.isnull().any().any()
         assert not np.isinf(X.values).any()
 
-        # Verify numeric columns were imputed with median
-        assert "numeric" in artifacts["imputers"]
+        # Verify numeric columns were imputed with -9999
+        assert artifacts["imputers"]["numeric"] == "constant_-9999"
 
     def test_preprocess_single_value_columns(self):
         """Test preprocessing with columns that have only one unique value"""
@@ -341,7 +346,8 @@ class TestPreprocessingEdgeCases:
             "normal_feature",
         ]
 
-        X, y, artifacts = preprocess_data(df, feature_cols, "target")
+        X, y, pipeline, preprocessing_info = preprocess_data(df, feature_cols, "target")
+        artifacts = get_preprocessing_artifacts(pipeline, preprocessing_info)
 
         # Even constant columns should be processed
         assert X.shape[1] == 4
@@ -368,7 +374,8 @@ class TestPreprocessingEdgeCases:
 
         # Test with non-duplicate columns (normal case)
         feature_cols = ["feature", "feature_2"]
-        X, y, artifacts = preprocess_data(df, feature_cols, "target")
+        X, y, pipeline, preprocessing_info = preprocess_data(df, feature_cols, "target")
+        artifacts = get_preprocessing_artifacts(pipeline, preprocessing_info)
 
         assert X.shape == (5, 2)
         assert not X.isnull().any().any()
@@ -400,7 +407,8 @@ class TestPreprocessingEdgeCases:
             "numeric",
         ]
 
-        X, y, artifacts = preprocess_data(df, feature_cols, "target")
+        X, y, pipeline, preprocessing_info = preprocess_data(df, feature_cols, "target")
+        artifacts = get_preprocessing_artifacts(pipeline, preprocessing_info)
 
         # All categorical columns should be encoded
         assert "unique_ids" in artifacts["categorical_columns"]

@@ -50,15 +50,6 @@ class DataPreparationResult(BaseModel):
     dataset_info: Dict[str, Any]
 
 
-class ModelConfiguration(BaseModel):
-    """Container for model parameters and configuration"""
-
-    base_params: Dict[str, Any]
-    param_grid: Dict[str, Any]
-    cv_folds: int
-    early_stopping_rounds: int
-
-
 class TrainingResult(BaseModel):
     """Container for training results"""
 
