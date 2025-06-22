@@ -4,7 +4,7 @@
 
 A streamlined web application for XGBoost binary classification model training, built with Next.js and FastAPI. This tool automates the workflow of loading datasets, training models, and generating performance insights including lift charts and feature importance analysis.
 
-![enter image description here](https://github-production-user-asset-6210df.s3.amazonaws.com/29800959/457685182-836fbe61-c253-475c-8171-1bb847f97680.gif?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAVCODYLSA53PQK4ZA%2F20250622%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250622T220832Z&X-Amz-Expires=300&X-Amz-Signature=4044092b16a68019773170de9d118dcb5e7174371bec93d5c2a0c7f89b4b7135&X-Amz-SignedHeaders=host)
+![2025-06-22 18 02 59](https://github.com/user-attachments/assets/47bf66b9-dd28-4bf9-a95c-a39a05239bc9)
 
 **Purpose**: Replace manual XGBoost model training workflows with a simple GUI that covers 90%+ of common binary classification tasks.
 
