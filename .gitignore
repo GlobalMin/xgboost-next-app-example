@@ -21,6 +21,8 @@ __pycache__
 */models/
 .ruff_cache
 *.csv
+.pytest_cache
+CLAUDE.md
 
 # next.js
 /.next/

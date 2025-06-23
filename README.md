@@ -18,7 +18,6 @@ The biggest takeaways on how to best work with an LLM Agent are:
 2) Leverage Claude's task plannning functionality or if using another agent start with generating a detailed plan that you output to a markdown file with check boxes that the LLM fills in as it progresses. Written plans are able to exist outside of 1 conversation's context window.
 3) Commit and push changes very frequently. You lose nothing by doing this a little too much and if you don't make a habit of it you will mess up the code base somehow that forces you to revert back to an older commit and will have to redo anything in between. More commits means more places to revert back to if needed.
 
-Ok, thank you for listening to my TED Talk. 👏
 
 ## Requirements
 
